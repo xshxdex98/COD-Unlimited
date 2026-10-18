@@ -1,4 +1,4 @@
-# KisakCOD
+# COD:Reborn built from KisakCOD
 
 ## About the project
 An open source fully-buildable reimplementation of Call of Duty 4
@@ -6,9 +6,6 @@ An open source fully-buildable reimplementation of Call of Duty 4
 Aimed towards mod developers and COD4 enthusiasts.
 
 ![licimg](./GPLv3_Logo.png)
-
-### Development Blog
-Learn about the Development of KisakCOD here: [https://lwss.github.io/Duty-Of-Kisak/](https://lwss.github.io/Duty-Of-Kisak/)
 
 ## Current Requirements
 - Windows OS
