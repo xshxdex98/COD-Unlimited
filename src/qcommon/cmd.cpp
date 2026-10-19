@@ -290,13 +290,13 @@ void Cmd_Dumpraw_f(void)
                 std::filesystem::create_directories(rawDir / dir);
 
                 fopen_s(&f, std::format("{}\\{}", rawDir, file.stringTable->name).c_str(), "w");
-                for (int row = 0; row < file.stringTable->columnCount; row++)
+                for (int row = 0; row < file.stringTable->rowCount; row++)
                 {
-                    for (int col = 0; col < file.stringTable->rowCount; col++)
+                    for (int col = 0; col < file.stringTable->columnCount; col++)
                     {
                         const char *str = StringTable_GetColumnValueForRow(file.stringTable, row, col);
                         fwrite(str, strlen(str), 1, f);
-                        if (col < file.stringTable->rowCount - 1)
+                        if (col < file.stringTable->columnCount - 1)
                         {
                             fwrite(",", 1, 1, f);
                         }
