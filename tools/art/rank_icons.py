@@ -1,12 +1,13 @@
 """Rank insignia for player levels 1-99 and the prestige emblems 1-10.
 
-Every shape is drawn as geometry at 8x size and scaled down, so the icons stay sharp and can be
-regenerated after any change here. Levels 1-55 follow CoD4's grades (three levels each, then
-Commander); 56-99 are COD Unlimited's own eleven tiers of four levels.
+Every icon is flat geometry drawn at 8x size and scaled down, styled like an enamel pin: a flat
+metal face, a darker bevelled rim and a hard dark outline. Levels 1-55 follow CoD4's grades
+(three levels each, then Commander); 56-99 are COD Unlimited's own eleven tiers of four levels.
+As in CoD4, the levels of one grade or tier share an icon; the level number is shown next to it.
 
-A prestige is a hollow seal instead of the tiers' hexagon. The device inside grows every three
-prestiges (a star, then a laurel around it, then a crown above it) and the metals step up with
-it; the pips say which of the three it is. Prestige 10 is the platinum and gold seal on its own.
+The tiers are hexagon badges with the emblem on dark enamel. The emblem counts up in chevrons,
+then a star joins it; the rim turns from steel to lime to gold to platinum, wings come in at
+Reaper and a crest at Legend. Prestiges use a toothed seal the same way, with one to three stars.
 """
 import math
 
@@ -16,14 +17,15 @@ SIZE = 128
 SCALE = 8
 S = SIZE * SCALE
 
-# Metals as (top, bottom) of a vertical gradient.
-STEEL = ((236, 240, 238), (118, 128, 124))
-BRONZE = ((240, 196, 150), (138, 84, 46))
-GOLD = ((255, 232, 150), (176, 120, 30))
-LIME = ((205, 245, 170), (100, 160, 70))
-PLATINUM = ((250, 252, 255), (150, 170, 190))
-DARK = ((70, 80, 76), (44, 52, 48))
-OUTLINE = (12, 16, 14)
+# Metals as (face, rim).
+STEEL = ((206, 213, 210), (116, 126, 122))
+GOLD = ((232, 190, 92), (146, 100, 34))
+LIME = ((168, 222, 128), (76, 128, 56))
+PLATINUM = ((238, 242, 246), (130, 146, 160))
+ENAMEL = ((24, 32, 29), (24, 32, 29))
+OUTLINE = (8, 11, 10)
+RIM = 0.016         # bevel width, in icon widths
+STROKE = 0.014      # outline width
 
 GRADES = [
     # (internal name, insignia, metal); three levels each, as in CoD4.
@@ -35,31 +37,31 @@ GRADES = [
     ("gysgt", ("chevrons", 3, 3), STEEL),
     ("msgt", ("chevrons", 3, 3, "diamond"), STEEL),
     ("mgysgt", ("chevrons", 3, 3, "star"), STEEL),
-    ("2ndlt", ("bars", 1), BRONZE),
+    ("2ndlt", ("bars", 1), GOLD),
     ("1stlt", ("bars", 1), STEEL),
     ("capt", ("bars", 2), STEEL),
     ("maj", ("leaf",), GOLD),
     ("ltcol", ("leaf",), STEEL),
-    ("col", ("wings",), STEEL),
+    ("col", ("eagle",), STEEL),
     ("bgen", ("stars", 1), STEEL),
     ("majgen", ("stars", 2), STEEL),
     ("ltgen", ("stars", 3), STEEL),
     ("gen", ("stars", 4), STEEL),
 ]
-COMMANDER = ("comm", ("wreath",), GOLD)
+COMMANDER = ("comm", ("laurel",), GOLD)
 TIERS = [
-    # (name, glyph, frame metal, glyph metal); four levels each, 56-99.
-    ("vanguard", "arrow", STEEL, LIME),
-    ("sentinel", "shield", STEEL, LIME),
-    ("warden", "shield_star", STEEL, LIME),
-    ("hunter", "reticle", STEEL, LIME),
-    ("spectre", "diamond", LIME, STEEL),
-    ("phantom", "blades", LIME, STEEL),
-    ("reaper", "skull_wings", LIME, STEEL),
-    ("warlord", "crown", GOLD, STEEL),
-    ("titan", "star_ring", GOLD, PLATINUM),
-    ("legend", "laurel", GOLD, PLATINUM),
-    ("apex", "winged_diamond", PLATINUM, GOLD),
+    # (name, chevrons, star, rim metal, emblem metal, wings, crest); four levels each, 56-99.
+    ("vanguard", 1, False, STEEL, STEEL, False, False),
+    ("sentinel", 2, False, STEEL, STEEL, False, False),
+    ("warden", 3, False, STEEL, STEEL, False, False),
+    ("hunter", 0, True, LIME, LIME, False, False),
+    ("spectre", 1, True, LIME, LIME, False, False),
+    ("phantom", 2, True, LIME, LIME, False, False),
+    ("reaper", 0, True, GOLD, GOLD, True, False),
+    ("warlord", 1, True, GOLD, GOLD, True, False),
+    ("titan", 2, True, GOLD, GOLD, True, False),
+    ("legend", 0, True, PLATINUM, PLATINUM, True, True),
+    ("apex", 2, True, PLATINUM, GOLD, True, True),
 ]
 
 
@@ -67,7 +69,19 @@ def px(x, y):
     return (x * S, y * S)
 
 
-def star_points(cx, cy, r, inner=0.42, rotation=-90):
+def layer():
+    """A blank mask and a drawing context for it."""
+    mask = Image.new("L", (S, S))
+    return mask, ImageDraw.Draw(mask)
+
+
+def grow(mask, width):
+    """Dilates (width > 0) or erodes (width < 0) a mask by about `width` icon widths."""
+    soft = mask.filter(ImageFilter.GaussianBlur(abs(width) * S / 2))
+    return soft.point(lambda v: 255 if (v > 8 if width > 0 else v > 247) else 0)
+
+
+def star_points(cx, cy, r, inner=0.4, rotation=-90):
     points = []
     for i in range(10):
         radius = r if i % 2 == 0 else r * inner
@@ -76,11 +90,15 @@ def star_points(cx, cy, r, inner=0.42, rotation=-90):
     return points
 
 
-def chevron(draw, cy, width, depth, thickness):
-    """A V pointing up, centred at x=0.5, its apex at cy."""
-    left, right = 0.5 - width / 2, 0.5 + width / 2
-    draw.polygon([px(0.5, cy), px(right, cy + depth), px(right, cy + depth + thickness),
-                  px(0.5, cy + thickness), px(left, cy + depth + thickness), px(left, cy + depth)], fill=255)
+def hexagon(cx, cy, r):
+    return [px(cx + math.cos(math.radians(a)) * r, cy + math.sin(math.radians(a)) * r) for a in range(-90, 270, 60)]
+
+
+def chevron(draw, cx, cy, width, depth, thickness):
+    """A V pointing up with its apex at (cx, cy)."""
+    left, right = cx - width / 2, cx + width / 2
+    draw.polygon([px(cx, cy), px(right, cy + depth), px(right, cy + depth + thickness),
+                  px(cx, cy + thickness), px(left, cy + depth + thickness), px(left, cy + depth)], fill=255)
 
 
 def rocker(draw, cy, width, sag, thickness):
@@ -100,261 +118,208 @@ def leaf(draw, cx, cy, length, width, angle):
     a = math.radians(angle)
     along, across = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
     points = []
-    for i in range(24):
-        t = math.pi * 2 * i / 24
-        u, v = math.cos(t) * length / 2, math.sin(t) * abs(math.sin(t)) ** 0.6 * width / 2
+    for i in range(32):
+        t = math.pi * 2 * i / 32
+        u, v = math.cos(t) * length / 2, math.sin(t) * abs(math.sin(t)) ** 0.5 * width / 2
         points.append(px(cx + u * along[0] + v * across[0], cy + u * along[1] + v * across[1]))
     draw.polygon(points, fill=255)
 
 
-def wreath(draw, cx, cy, radius, count, length, width):
-    """Two branches of leaves climbing either side of a circle."""
-    for side in (1, -1):
-        for i in range(count):
-            t = math.radians(-70 + i * 125 / (count - 1))
-            x = cx + side * math.cos(t) * radius
-            y = cy - math.sin(t) * radius
-            tangent = math.degrees(math.atan2(-math.cos(t), -side * math.sin(t)))
-            leaf(draw, x, y, length, width, tangent + side * 25)
+def laurel(draw, cx, cy, radius, leaves=5, size=0.14):
+    """Two branches climbing either side of (cx, cy) from the bottom, each a stem with pairs of
+    leaves growing off it, smaller towards the leaf at the tip."""
+    for side in (-1, 1):
+        # Angles measured from straight down, sweeping up the side.
+        stem = [(cx + side * math.sin(a) * radius, cy + math.cos(a) * radius)
+                for a in (math.radians(30 + i * 120 / leaves) for i in range(leaves + 1))]
+        draw.line([px(x, y) for x, y in stem[:-1]], fill=255, width=round(0.022 * S), joint="curve")
+        for i in range(leaves):
+            (x0, y0), (x1, y1) = stem[i], stem[i + 1]
+            heading = math.degrees(math.atan2(y1 - y0, x1 - x0))
+            length = size * (1 - 0.35 * i / leaves)
+            turns = (0,) if i == leaves - 1 else (-42, 42)
+            base = (x0, y0) if i == leaves - 1 else (x0 + (x1 - x0) * 0.5, y0 + (y1 - y0) * 0.5)
+            for turn in turns:
+                a = math.radians(heading + turn)
+                leaf(draw, base[0] + math.cos(a) * length * 0.48, base[1] + math.sin(a) * length * 0.48, length,
+                     length * 0.4, heading + turn)
 
 
-def diamond(draw, cx, cy, rx, ry):
-    draw.polygon([px(cx, cy - ry), px(cx + rx, cy), px(cx, cy + ry), px(cx - rx, cy)], fill=255)
+def wing(draw, side, cx, cy, span, feathers=3):
+    """A swept wing of straight-cut feathers reaching out from (cx, cy)."""
+    for i in range(feathers):
+        reach = span * (1 - i * 0.2)
+        y = cy + i * 0.06
+        draw.polygon([px(cx, y), px(cx + side * reach, y - 0.07 + i * 0.012),
+                      px(cx + side * (reach - 0.03), y - 0.02 + i * 0.012), px(cx, y + 0.045)], fill=255)
 
 
-def draw_insignia(new_layer, insignia):
-    """Draws a grade's insignia; new_layer() gives a fresh layer, so separate shapes get their own shading."""
+def oak_leaf(draw):
+    """A leaf outline whose edge swells into four and a half rounded lobes a side, on a stem."""
+    top, bottom = 0.13, 0.7
+    left, right = [], []
+    for i in range(121):
+        t = i / 120
+        half = 0.21 * math.sin(math.pi * t) ** 0.7 * (0.6 + 0.4 * abs(math.sin(math.pi * 4.5 * t)))
+        y = top + (bottom - top) * t
+        left.append(px(0.5 - half, y))
+        right.append(px(0.5 + half, y))
+    draw.polygon(left + right[::-1], fill=255)
+    draw.rounded_rectangle([px(0.48, bottom - 0.04), px(0.52, 0.86)], radius=0.012 * S, fill=255)
+
+
+def insignia_layers(insignia, metal):
+    """A grade's insignia as (mask, metal) layers; overlapping parts get their own layer."""
     kind = insignia[0]
-    draw = new_layer()
+    mask, draw = layer()
+    layers = [(mask, metal)]
     if kind == "chevrons":
         count, rockers = insignia[1], insignia[2]
         device = insignia[3] if len(insignia) > 3 else None
-        chevron_step, rocker_step = 0.115, 0.085
-        height = (count - 1) * chevron_step + 0.23 + (0.15 if device else 0.07 if rockers else 0) + rockers * rocker_step
-        y = 0.44 - height / 2
+        chevron_step, rocker_step = 0.11, 0.08
+        height = (count - 1) * chevron_step + 0.22 + (0.14 if device else 0.06 if rockers else 0) + rockers * rocker_step
+        y = 0.5 - height / 2
         for _ in range(count):
-            chevron(draw, y, 0.62, 0.16, 0.07)
+            chevron(draw, 0.5, y, 0.6, 0.15, 0.065)
             y += chevron_step
-        y += 0.23 - chevron_step
+        y += 0.22 - chevron_step
         if device == "diamond":
-            diamond(draw, 0.5, y + 0.06, 0.06, 0.07)
+            draw.polygon([px(0.5, y - 0.005), px(0.555, y + 0.06), px(0.5, y + 0.125), px(0.445, y + 0.06)], fill=255)
         elif device == "star":
-            draw.polygon(star_points(0.5, y + 0.065, 0.085), fill=255)
-        y += 0.15 if device else 0.07
+            draw.polygon(star_points(0.5, y + 0.065, 0.08), fill=255)
+        y += 0.14 if device else 0.06
         for _ in range(rockers):
-            rocker(draw, y - 0.07, 0.62, 0.07, 0.06)
+            rocker(draw, y - 0.06, 0.6, 0.065, 0.055)
             y += rocker_step
     elif kind == "bars":
         count = insignia[1]
         for i in range(count):
-            x = 0.5 + (i - (count - 1) / 2) * 0.22
-            draw.rounded_rectangle([px(x - 0.07, 0.2), px(x + 0.07, 0.72)], radius=0.025 * S, fill=255)
+            x = 0.5 + (i - (count - 1) / 2) * 0.2
+            draw.rounded_rectangle([px(x - 0.065, 0.2), px(x + 0.065, 0.8)], radius=0.02 * S, fill=255)
     elif kind == "leaf":
-        # Five lobes down each side, narrowing to the tip at the top.
-        def edge(side):
-            for i in range(11):
-                t = i / 10
-                width = 0.25 * math.sin(math.pi * min(1, t * 1.15)) * (0.82 + 0.18 * math.cos(t * 10 * math.pi))
-                yield px(0.5 + side * width, 0.14 + t * 0.56)
-
-        draw.polygon([px(0.5, 0.12), *edge(1), px(0.5, 0.71), *reversed(list(edge(-1)))], fill=255)
-        draw.rounded_rectangle([px(0.48, 0.66), px(0.52, 0.8)], radius=0.01 * S, fill=255)
-    elif kind == "wings":
-        for side in (1, -1):
-            for i in range(4):
-                y = 0.3 + i * 0.075
-                reach = 0.36 - i * 0.05
-                draw.polygon([px(0.5 + side * 0.06, y), px(0.5 + side * reach, y - 0.06),
-                              px(0.5 + side * (reach - 0.02), y + 0.035), px(0.5 + side * 0.06, y + 0.06)], fill=255)
-        diamond(draw, 0.5, 0.42, 0.075, 0.18)
+        oak_leaf(draw)
+    elif kind == "eagle":
+        for side in (-1, 1):
+            wing(draw, side, 0.5, 0.36, 0.42, 4)
+        body, body_draw = layer()
+        body_draw.polygon([px(0.5, 0.22), px(0.565, 0.34), px(0.545, 0.66), px(0.5, 0.74), px(0.455, 0.66),
+                           px(0.435, 0.34)], fill=255)
+        layers.append((body, metal))
     elif kind == "stars":
         count = insignia[1]
-        positions = {1: [(0.5, 0.45)], 2: [(0.3, 0.45), (0.7, 0.45)],
-                     3: [(0.22, 0.47), (0.5, 0.38), (0.78, 0.47)],
-                     4: [(0.3, 0.3), (0.7, 0.3), (0.3, 0.64), (0.7, 0.64)]}[count]
-        radius = {1: 0.3, 2: 0.2, 3: 0.16, 4: 0.16}[count]
-        for i, (x, y) in enumerate(positions):
-            (draw if i == 0 else new_layer()).polygon(star_points(x, y, radius), fill=255)
-    elif kind == "wreath":
-        wreath(draw, 0.5, 0.45, 0.33, 5, 0.17, 0.075)
-        draw.polygon(star_points(0.5, 0.44, 0.2), fill=255)
+        positions = {1: [(0.5, 0.5)], 2: [(0.3, 0.5), (0.7, 0.5)],
+                     3: [(0.2, 0.5), (0.5, 0.5), (0.8, 0.5)],
+                     4: [(0.3, 0.3), (0.7, 0.3), (0.3, 0.7), (0.7, 0.7)]}[count]
+        radius = {1: 0.3, 2: 0.19, 3: 0.14, 4: 0.17}[count]
+        for x, y in positions:
+            draw.polygon(star_points(x, y + radius * 0.06, radius), fill=255)
+    elif kind == "laurel":
+        laurel(draw, 0.5, 0.5, 0.34)
+        star, star_draw = layer()
+        star_draw.polygon(star_points(0.5, 0.5, 0.2), fill=255)
+        layers.append((star, metal))
+    return layers
 
 
-def draw_glyph(draw, glyph):
-    if glyph == "arrow":
-        chevron(draw, 0.27, 0.42, 0.14, 0.09)
-        chevron(draw, 0.43, 0.42, 0.14, 0.09)
-    elif glyph in ("shield", "shield_star"):
-        draw.polygon([px(0.32, 0.27), px(0.68, 0.27), px(0.68, 0.48), px(0.5, 0.64), px(0.32, 0.48)], fill=255)
-        if glyph == "shield_star":
-            draw.polygon(star_points(0.5, 0.43, 0.11), fill=0)
-    elif glyph == "reticle":
-        draw.ellipse([px(0.3, 0.25), px(0.7, 0.65)], fill=255)
-        draw.ellipse([px(0.35, 0.3), px(0.65, 0.6)], fill=0)
-        for x0, y0, x1, y1 in [(0.48, 0.2, 0.52, 0.36), (0.48, 0.54, 0.52, 0.7),
-                               (0.25, 0.43, 0.41, 0.47), (0.59, 0.43, 0.75, 0.47)]:
-            draw.rectangle([px(x0, y0), px(x1, y1)], fill=255)
-    elif glyph == "diamond":
-        diamond(draw, 0.5, 0.45, 0.2, 0.22)
-        diamond(draw, 0.5, 0.45, 0.11, 0.13)
-        draw.polygon([px(0.5, 0.36), px(0.56, 0.45), px(0.5, 0.54), px(0.44, 0.45)], fill=0)
-    elif glyph == "blades":
-        for side in (1, -1):
-            draw.polygon([px(0.5 - side * 0.2, 0.24), px(0.5 - side * 0.14, 0.24),
-                          px(0.5 + side * 0.2, 0.62), px(0.5 + side * 0.13, 0.64)], fill=255)
-        draw.ellipse([px(0.45, 0.4), px(0.55, 0.5)], fill=255)
-    elif glyph == "skull_wings":
-        for side in (1, -1):
-            for i in range(3):
-                y = 0.33 + i * 0.07
-                draw.polygon([px(0.5 + side * 0.1, y), px(0.5 + side * (0.36 - i * 0.05), y - 0.05),
-                              px(0.5 + side * 0.1, y + 0.05)], fill=255)
-        draw.ellipse([px(0.4, 0.27), px(0.6, 0.47)], fill=255)
-        draw.rectangle([px(0.44, 0.44), px(0.56, 0.55)], fill=255)
-        draw.ellipse([px(0.43, 0.34), px(0.48, 0.39)], fill=0)
-        draw.ellipse([px(0.52, 0.34), px(0.57, 0.39)], fill=0)
-    elif glyph == "crown":
-        draw.polygon([px(0.28, 0.6), px(0.28, 0.32), px(0.39, 0.44), px(0.5, 0.25), px(0.61, 0.44),
-                      px(0.72, 0.32), px(0.72, 0.6)], fill=255)
-        draw.rectangle([px(0.28, 0.6), px(0.72, 0.65)], fill=255)
-    elif glyph == "star_ring":
-        draw.polygon(star_points(0.5, 0.42, 0.24, inner=0.38), fill=255)
-        draw.ellipse([px(0.43, 0.35), px(0.57, 0.49)], fill=0)
-        draw.ellipse([px(0.46, 0.38), px(0.54, 0.46)], fill=255)
-    elif glyph == "laurel":
-        wreath(draw, 0.5, 0.45, 0.23, 5, 0.12, 0.055)
-        draw.polygon(star_points(0.5, 0.43, 0.12), fill=255)
-    elif glyph == "winged_diamond":
-        diamond(draw, 0.5, 0.42, 0.14, 0.2)
-        for side in (1, -1):
-            for i in range(3):
-                y = 0.32 + i * 0.07
-                draw.polygon([px(0.5 + side * 0.12, y), px(0.5 + side * (0.38 - i * 0.06), y - 0.07),
-                              px(0.5 + side * (0.34 - i * 0.06), y + 0.01), px(0.5 + side * 0.12, y + 0.05)],
-                             fill=255)
+def emblem(draw, chevrons, star, cx, cy):
+    """The tier emblem: a star over up to three chevrons, centred on (cx, cy)."""
+    step = 0.095
+    if star and not chevrons:
+        draw.polygon(star_points(cx, cy + 0.015, 0.19), fill=255)
+        return
+    height = (0.18 if star else 0) + (chevrons - 1) * step + 0.15
+    y = cy - height / 2
+    if star:
+        draw.polygon(star_points(cx, y + 0.08, 0.1), fill=255)
+        y += 0.18
+    for _ in range(chevrons):
+        chevron(draw, cx, y, 0.32, 0.085, 0.065)
+        y += step
 
 
-def frame_mask():
-    """The tier badge: a hexagon pointing up and down, hollow."""
-    mask = Image.new("L", (S, S))
-    draw = ImageDraw.Draw(mask)
-    outer = [px(0.5, 0.06), px(0.86, 0.25), px(0.86, 0.62), px(0.5, 0.82), px(0.14, 0.62), px(0.14, 0.25)]
-    inner = [px(0.5, 0.11), px(0.81, 0.28), px(0.81, 0.59), px(0.5, 0.77), px(0.19, 0.59), px(0.19, 0.28)]
-    draw.polygon(outer, fill=255)
-    draw.polygon(inner, fill=0)
-    return mask
+def tier_layers(chevrons, star, rim, metal, wings, crest):
+    cx, cy = 0.5, 0.5
+    layers = []
+    if wings:
+        mask, draw = layer()
+        for side in (-1, 1):
+            wing(draw, side, cx + side * 0.22, 0.43, 0.25)
+        layers.append((mask, rim))
+    badge, draw = layer()
+    draw.polygon(hexagon(cx, cy, 0.34), fill=255)
+    if crest:
+        draw.polygon(star_points(cx, 0.15, 0.09), fill=255)
+    layers.append((badge, rim))
+    face, draw = layer()
+    draw.polygon(hexagon(cx, cy, 0.27), fill=255)
+    layers.append((face, ENAMEL))
+    mark, draw = layer()
+    emblem(draw, chevrons, star, cx, cy)
+    layers.append((mark, metal))
+    return layers
 
 
-def pip_masks(count, total):
-    """Small diamonds under the insignia, the first `count` lit: which level of the grade this is."""
-    lit, unlit = Image.new("L", (S, S)), Image.new("L", (S, S))
-    for i in range(total):
-        x = 0.5 + (i - (total - 1) / 2) * 0.075
-        diamond(ImageDraw.Draw(lit if i < count else unlit), x, 0.9, 0.026, 0.034)
-    return [(lit, LIME), (unlit, DARK)]
-
-
-def metal(mask, colors):
-    """Fill a mask with a vertical metal gradient over its own height, with a soft sheen up top."""
-    top, bottom = colors
-    box = mask.getbbox()
-    gradient = Image.new("RGB", (1, S))
-    if box:
-        for y in range(S):
-            t = min(1.0, max(0.0, (y - box[1]) / max(1, box[3] - box[1] - 1)))
-            sheen = 0.12 * max(0.0, 1 - abs(t - 0.3) / 0.2)
-            gradient.putpixel((0, y), tuple(min(255, round(a + (b - a) * t + 255 * sheen)) for a, b in zip(top, bottom)))
-    layer = gradient.resize((S, S)).convert("RGBA")
-    layer.putalpha(mask)
-    return layer
-
-
-def compose(layers):
-    """Stack (mask, metal) layers with a dark outline around everything, then scale down."""
+def render(layers):
+    """Outlines everything, then paints each layer as a flat face inside a darker bevelled rim."""
     union = Image.new("L", (S, S))
     for mask, _ in layers:
         union = ImageChops.lighter(union, mask)
-    outline = union.filter(ImageFilter.GaussianBlur(SCALE * 1.5)).point(lambda v: min(255, v * 6))
     image = Image.new("RGBA", (S, S), OUTLINE + (0,))
-    image.putalpha(outline)
-    for mask, colors in layers:
-        image = Image.alpha_composite(image, metal(mask, colors))
+    image.putalpha(grow(union, STROKE))
+    for mask, (face, rim) in layers:
+        image.paste(rim + (255,), mask=mask)
+        image.paste(face + (255,), mask=grow(mask, -RIM))
     return image.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
-
-
-def grade_icon(insignia, colors, level, levels):
-    masks = []
-
-    def new_layer():
-        masks.append(Image.new("L", (S, S)))
-        return ImageDraw.Draw(masks[-1])
-
-    draw_insignia(new_layer, insignia)
-    return compose([*((mask, colors) for mask in masks), *pip_masks(level, levels)])
-
-
-def tier_icon(glyph, frame_colors, glyph_colors, level):
-    mask = Image.new("L", (S, S))
-    draw_glyph(ImageDraw.Draw(mask), glyph)
-    return compose([(frame_mask(), frame_colors), (mask, glyph_colors), *pip_masks(level, 4)])
 
 
 def icons():
     """Yields (material name, image) for every level, in level order."""
-    for name, insignia, colors in GRADES:
+    for name, insignia, metal in GRADES:
+        image = render(insignia_layers(insignia, metal))
         for level in range(1, 4):
-            yield f"cu_rank_{name}{level}", grade_icon(insignia, colors, level, 3)
-    name, insignia, colors = COMMANDER
-    yield f"cu_rank_{name}1", grade_icon(insignia, colors, 1, 1)
-    for name, glyph, frame_colors, glyph_colors in TIERS:
+            yield f"cu_rank_{name}{level}", image
+    name, insignia, metal = COMMANDER
+    yield f"cu_rank_{name}1", render(insignia_layers(insignia, metal))
+    for name, *design in TIERS:
+        image = render(tier_layers(*design))
         for level in range(1, 5):
-            yield f"cu_rank_{name}{level}", tier_icon(glyph, frame_colors, glyph_colors, level)
+            yield f"cu_rank_{name}{level}", image
 
 
-SEAL_CENTER = (0.5, 0.46)
-# (seal metal, device metal) for prestiges 1-3, 4-6, 7-9 and 10.
-PRESTIGE_BANDS = [(STEEL, LIME), (LIME, STEEL), (GOLD, STEEL), (PLATINUM, GOLD)]
+# (seal rim, seal emblem) for prestiges 1-3, 4-6 and 7-9; prestige 10 has its own.
+PRESTIGE_BANDS = [(STEEL, LIME), (LIME, STEEL), (GOLD, STEEL)]
 
 
-def seal_mask(teeth):
-    """A toothed ring, hollow like the tier hexagons."""
-    mask = Image.new("L", (S, S))
-    draw = ImageDraw.Draw(mask)
-    cx, cy = SEAL_CENTER
+def seal(draw, teeth, cx, cy):
     points = []
     for i in range(teeth * 2):
-        radius = 0.41 if i % 2 == 0 else 0.37
+        radius = 0.41 if i % 2 == 0 else 0.36
         angle = math.pi * 2 * i / (teeth * 2) - math.pi / 2
         points.append(px(cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
     draw.polygon(points, fill=255)
-    draw.ellipse([px(cx - 0.31, cy - 0.31), px(cx + 0.31, cy + 0.31)], fill=0)
-    return mask
-
-
-def seal_device_mask(band):
-    mask = Image.new("L", (S, S))
-    draw = ImageDraw.Draw(mask)
-    cx, cy = SEAL_CENTER
-    crowned = band >= 2
-    star_y = cy + (0.05 if crowned else 0.01)
-    draw.polygon(star_points(cx, star_y, 0.13 if crowned else 0.17), fill=255)
-    if band >= 1:
-        wreath(draw, cx, star_y, 0.2, 5, 0.1, 0.045)
-    if crowned:
-        draw.polygon([px(0.41, 0.31), px(0.41, 0.22), px(0.455, 0.265), px(0.5, 0.2), px(0.545, 0.265),
-                      px(0.59, 0.22), px(0.59, 0.31)], fill=255)
-    return mask
 
 
 def prestige_icons():
-    """Yields (material name, image) for prestiges 1-10."""
+    """Yields (material name, image) for prestiges 1-10: one to three stars on a seal whose metal
+    steps up every three prestiges, then a laurelled star for prestige 10."""
+    cx, cy = 0.5, 0.5
     for prestige in range(1, 11):
-        band = min(3, (prestige - 1) // 3)
-        seal, device = PRESTIGE_BANDS[band]
-        layers = [(seal_mask(24 if band == 3 else 16), seal), (seal_device_mask(band), device)]
-        if band < 3:
-            layers += pip_masks((prestige - 1) % 3 + 1, 3)
-        yield f"cu_prestige_{prestige}", compose(layers)
+        outer, inner = (PLATINUM, GOLD) if prestige == 10 else PRESTIGE_BANDS[(prestige - 1) // 3]
+        ring, draw = layer()
+        seal(draw, 24 if prestige == 10 else 16, cx, cy)
+        face, face_draw = layer()
+        face_draw.ellipse([px(cx - 0.29, cy - 0.29), px(cx + 0.29, cy + 0.29)], fill=255)
+        mark, draw = layer()
+        if prestige == 10:
+            laurel(draw, cx, cy, 0.2, 4, 0.1)
+            draw.polygon(star_points(cx, cy, 0.11), fill=255)
+        else:
+            count = (prestige - 1) % 3 + 1
+            radius = {1: 0.17, 2: 0.11, 3: 0.09}[count]
+            for i in range(count):
+                x = cx + (i - (count - 1) / 2) * radius * 1.9
+                draw.polygon(star_points(x, cy + radius * 0.08, radius), fill=255)
+        yield f"cu_prestige_{prestige}", render([(ring, outer), (face, ENAMEL), (mark, inner)])
 
 
 def contact_sheet(images, columns):
@@ -370,8 +335,10 @@ if __name__ == "__main__":
 
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "build/art/preview")
     out.mkdir(parents=True, exist_ok=True)
-    ranks = [image for _, image in icons()]
+    ranks = list(icons())
+    # One of each design: the grades, Commander and the tiers.
+    designs = [image for i, (name, image) in enumerate(ranks) if i == 0 or image is not ranks[i - 1][1]]
     prestiges = [image for _, image in prestige_icons()]
-    contact_sheet(ranks, 11).save(out / "rank_icons.png")
+    contact_sheet(designs, 10).save(out / "rank_icons.png")
     contact_sheet(prestiges, 5).save(out / "prestige_icons.png")
-    print(len(ranks), "rank icons,", len(prestiges), "prestige emblems")
+    print(len(ranks), "rank icons in", len(designs), "designs,", len(prestiges), "prestige emblems")
