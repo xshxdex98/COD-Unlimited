@@ -8,7 +8,7 @@ folder is put together under build/linker each time, so nothing stale gets linke
 
 Materials go into the fastfile; the game loads their images from images/*.iwi through the file
 system, so those ship in the .iwd. Generated art (tools/art) is rendered into the workspace and
-listed alongside mod/'s own assets, and so are the display names of the maps in mod/maps.csv.
+listed alongside mod/'s own assets, and so are the maps in mod/maps.csv (names and mapsTable rows).
 """
 import shutil
 import subprocess
@@ -66,16 +66,25 @@ def write_generated_art():
     return [f"material,{name}" for name in names]
 
 
-def write_map_names():
-    """The display names of the maps we ship, as MPUI_ strings like the stock maps'; returns the zone entry."""
+def write_maps():
+    """The maps we ship, listed like the stock ones: display names as MPUI_ strings and rows in
+    mp/mapsTable.csv (soldier types, name, loading screen) after the stock rows. Returns the zone entries."""
+    maps = install_maps.read_maps()
     lines = ['VERSION             "1"', 'CONFIG              "C:\\trees\\cod3\\cod3\\bin\\StringEd.cfg"',
              'FILENOTES           ""', ""]
-    for _, display, key in install_maps.read_maps():
-        lines += [f"REFERENCE           {key.removeprefix('MPUI_')}", f'LANG_ENGLISH        "{display}"', ""]
+    for row in maps:
+        lines += [f"REFERENCE           {row['key'].removeprefix('MPUI_')}", f'LANG_ENGLISH        "{row["name"]}"', ""]
     folder = WORK / "raw" / "english" / "localizedstrings"
     folder.mkdir(parents=True)
     (folder / "mpui.str").write_text("\n".join(lines + ["ENDMARKER"]) + "\n")
-    return ["localize,mpui"]
+
+    # Columns: map, allies and axis soldier types, name, loading screen, index, description (unused), compass overlay.
+    table = (STOCK / "mp" / "mapstable.csv").read_text().splitlines()
+    index = max(int(line.split(",")[5]) for line in table[1:])
+    for number, row in enumerate(maps, index + 1):
+        table.append(f"{row['map']},{row['allies']},{row['axis']},{row['key']},{row['loadscreen']},{number},,compass_overlay_map_blank")
+    (WORK / "raw" / "mp" / "mapstable.csv").write_text("\n".join(table) + "\n")
+    return ["localize,mpui", "stringtable,mp/mapstable.csv"]
 
 
 def run_tool(exe, *args):
@@ -114,7 +123,7 @@ def main():
     for name in ["source_data", "texture_assets"]:
         if (MOD / name).exists():
             shutil.copytree(MOD / name, WORK / name)
-    generated = write_generated_art() + write_map_names()
+    generated = write_generated_art() + write_maps()
     (WORK / "zone_source" / "english" / "assetlist").mkdir(parents=True)     # the linker writes its asset list here
     assets = (MOD / f"{ZONE}.csv").read_text().splitlines() + generated
     (WORK / "zone_source" / f"{ZONE}.csv").write_text("\n".join(assets) + "\n")
@@ -125,15 +134,17 @@ def main():
     if not built.exists():
         sys.exit(f"linker_pc wrote no {built.name}")
 
-    shutil.copy(built, game / "zone" / "english" / built.name)
     images = sorted((WORK / "raw" / "images").glob("*.iwi"))
     installed = game / "main" / IWD
-    installed.unlink(missing_ok=True)
+    # The iwd goes first: a running game holds it open, and then nothing is installed.
     if images:
         with zipfile.ZipFile(WORK / IWD, "w", zipfile.ZIP_DEFLATED) as archive:
             for image in images:
                 archive.write(image, f"images/{image.name}")
         shutil.copy(WORK / IWD, installed)
+    else:
+        installed.unlink(missing_ok=True)
+    shutil.copy(built, game / "zone" / "english" / built.name)
     print(f"{built.name}: {built.stat().st_size} bytes, {IWD}: {len(images)} images")
 
 

@@ -4,16 +4,19 @@
 
 Each map gets zone/maps/<map>/ with its two zones, its iwds and an arena that lists it with its
 display name (a localized string built into unlimited_mp.ff), the gametypes it supports and the
-loading screen image the menus preview it with. Iwds
-stay in the map's folder because they often replace stock images: the game only searches them
-while that map is loaded. The maps are third-party content, so they are not in this repository.
+loading screen the menus preview it with. Iwds stay in the map's folder because they often replace
+stock images: the game only searches them while that map is loaded. The maps are third-party
+content, so they are not in this repository.
+
+mod/maps.csv holds what was read from each map's own files: its loading screen image (named by its
+load zone; remakes often name it their own way) and the soldier types its script sets for each
+team, which the build puts in mp/mapsTable.csv like the stock maps'.
 """
 import csv
 import re
 import shutil
 import sys
 import zipfile
-import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,10 +29,12 @@ SKIP = "without character model"
 
 
 def read_maps():
-    """[(map, display name, localized string)] in mod/maps.csv order."""
+    """mod/maps.csv's rows, in order, each with its localized string as "key"."""
     with MAPS.open(newline="") as file:
-        return [(row["map"], row["name"], "MPUI_" + re.sub(r"[^A-Z0-9]+", "_", row["name"].upper()))
-                for row in csv.DictReader(file)]
+        maps = list(csv.DictReader(file))
+    for row in maps:
+        row["key"] = "MPUI_" + re.sub(r"[^A-Z0-9]+", "_", row["name"].upper())
+    return maps
 
 
 def find_zone(source, name):
@@ -39,21 +44,13 @@ def find_zone(source, name):
     return found[0]
 
 
-def loadscreen(name, load_zone, iwds):
-    """The image the map's load zone shows while loading, when its iwds have it. Most are
-    loadscreen_<map>, but remakes often name it their own way (bo2drone_loadscreen)."""
-    zone = zlib.decompress(load_zone.read_bytes()[12:])
-    referenced = {text.decode().lower() for text in re.findall(rb"[\w\-#&$~.]{4,}(?=\x00)", zone)}
-    images = set()
+def has_image(iwds, image):
+    entry = f"images/{image}.iwi".lower()
     for iwd in iwds:
         with zipfile.ZipFile(iwd) as archive:
-            images |= {Path(entry).stem.lower() for entry in archive.namelist()
-                       if entry.lower().startswith("images/") and entry.lower().endswith(".iwi")}
-    found = sorted(referenced & images)
-    preferred = f"loadscreen_{name}"
-    if preferred in found:
-        return preferred
-    return found[0] if len(found) == 1 else None
+            if any(name.lower() == entry for name in archive.namelist()):
+                return True
+    return False
 
 
 def main():
@@ -63,26 +60,37 @@ def main():
     game = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "bin" / "Debug"
     installed = game / "zone" / "maps"
     maps = read_maps()
-    zones = {name: find_zone(source, name) for name, _, _ in maps}   # all found before anything changes
 
-    for name, display, key in maps:
-        zone = zones[name]
-        files = [zone, zone.with_name(f"{name}_load.ff"), *sorted(zone.parent.glob("*.iwd"))]
-        if not files[1].exists():
-            sys.exit(f"{name}: no {files[1].name} next to {zone}")
+    # Everything is found and checked before anything in the game changes.
+    files = {}
+    for row in maps:
+        name = row["map"]
+        zone = find_zone(source, name)
+        load = zone.with_name(f"{name}_load.ff")
+        iwds = sorted(zone.parent.glob("*.iwd"))
+        if not load.exists():
+            sys.exit(f"{name}: no {load.name} next to {zone}")
+        if not has_image(iwds, row["loadscreen"]):
+            sys.exit(f"{name}: its iwds have no images/{row['loadscreen']}.iwi")
+        files[name] = [zone, load, *iwds]
+
+    for row in maps:
+        name = row["map"]
         target = installed / name
-        shutil.rmtree(target, ignore_errors=True)
-        target.mkdir(parents=True)
-        for file in files:
+        target.mkdir(parents=True, exist_ok=True)
+        # Copied over the old files, which stay until the copies land: a file the running game
+        # holds open fails here instead of leaving the map half deleted.
+        for file in files[name]:
             shutil.copy2(file, target / file.name)
-        image = loadscreen(name, files[1], files[2:])
-        arena = [f'\tmap\t\t\t"{name}"', f'\tlongname\t"{key}"', f'\tgametype\t"{GAMETYPES}"']
-        if image:
-            arena.append(f'\tloadscreen\t"{image}"')
-        (target / f"{name}.arena").write_text("{\n" + "\n".join(arena) + "\n}\n")
-        print(f"{display:14} {name}: {', '.join(file.name for file in files[2:])}, preview {image or 'MISSING'}")
+        arena = target / f"{name}.arena"
+        for stale in set(target.iterdir()) - {target / file.name for file in files[name]} - {arena}:
+            stale.unlink()
+        arena.write_text(
+            f'{{\n\tmap\t\t\t"{name}"\n\tlongname\t"{row["key"]}"\n\tgametype\t"{GAMETYPES}"\n'
+            f'\tloadscreen\t"{row["loadscreen"]}"\n}}\n')
+        print(f"{row['name']:14} {name}")
 
-    listed = {name for name, _, _ in maps}
+    listed = {row["map"] for row in maps}
     for folder in sorted(installed.iterdir()):
         if folder.name not in listed:
             print(f"not in {MAPS.name}, left alone: {folder}")
