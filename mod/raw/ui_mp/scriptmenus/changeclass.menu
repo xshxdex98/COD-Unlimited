@@ -1,0 +1,76 @@
+// Choose Class (online games): the default and custom classes on the side panel, the highlighted
+// one's loadout on the right. Responses, unlocks and loadout lookups are the stock ones
+// (raw/ui_mp/scriptmenus/changeclass.menu in the mod tools); _menus.gsc answers to this name.
+
+#include "ui_mp/unlimited.inc"
+
+// Highlighting a class picks its loadout source: ui_multi_s/ui_multi_dt push the other source
+// out of the min() below, as in the stock menu.
+#define HIGH_BOUND		"1000"
+#define SHOW_DEFAULT( offset )	execnow "set ui_class_offset "offset"; set ui_multi_s "HIGH_BOUND"; set ui_multi_dt 0";
+#define SHOW_CUSTOM( offset )	setdvar ui_custom_class_highlighted offset; execnow "set ui_multi_s 0; set ui_multi_dt "HIGH_BOUND;
+
+#define DEFAULT_SLOT( field )	int(tablelookup( "mp/classTable.csv", 1, (dvarInt("ui_class_offset")+field), 5 ))
+#define CUSTOM_SLOT( field )	stat( dvarInt( ui_custom_class_highlighted ) + 200 + field )
+#define SLOT( field )			int(min( CUSTOM_SLOT( field )+dvarInt(ui_multi_s), DEFAULT_SLOT( field )+dvarInt(ui_multi_dt) ))
+
+#define STAT_CAC_PRIMARY				SLOT( 1 )
+#define STAT_CAC_PRIMARY_ATTACHMENT		SLOT( 2 )
+#define STAT_CAC_SECONDARY				SLOT( 3 )
+#define STAT_CAC_SECONDARY_ATTACHMENT	SLOT( 4 )
+#define STAT_CAC_SPECIALTY_EQUIPMENT	SLOT( 5 )
+#define STAT_CAC_SPECIALTY_WEAPON		SLOT( 6 )
+#define STAT_CAC_SPECIALTY_ABILITY		SLOT( 7 )
+#define STAT_CAC_SPECIAL_GRENADE		SLOT( 8 )
+
+#define DEFAULT_CLASS( button, edge, y, label, response, offset, visArg ) \
+	LIST_BUTTON( button, edge, y, text label, scriptMenuResponse response; close self;, SHOW_DEFAULT( offset ), visArg )
+
+#define CUSTOM_CLASS( button, edge, y, nameDvar, response, offset, unlockStat ) \
+	LIST_BUTTON( button, edge, y, exp text( dvarString( nameDvar ) );, scriptMenuResponse response; close self;, SHOW_CUSTOM( offset ), when( stat( unlockStat ) > 0 ) )
+
+{
+	menuDef
+	{
+		name			"changeclass"
+		rect			0 0 640 480
+		focuscolor		.94 .98 .91 1
+		style			0
+		blurWorld		7.0
+		onOpen
+		{
+			SHOW_DEFAULT( "200" )
+			focusFirst;
+			BUTTON_FOCUS( class_1, edge_1 )
+		}
+		onEsc
+		{
+			close self;
+			uiScript openHomeMenu;
+		}
+
+		PAGE( "COD UNLIMITED  /  MATCH", text "CHOOSE CLASS", exp text( MAP_NAME ); )
+
+		SECTION( 110, "DEFAULT CLASSES" )
+		DEFAULT_CLASS( class_1, edge_1, 126, "@CLASS_CLASS1", "assault_mp,0", "200", 1 )
+		DEFAULT_CLASS( class_2, edge_2, 152, "@CLASS_CLASS2", "specops_mp,0", "210", 1 )
+		DEFAULT_CLASS( class_3, edge_3, 178, "@CLASS_CLASS3", "heavygunner_mp,0", "220", 1 )
+		DEFAULT_CLASS( class_4, edge_4, 204, "@CLASS_CLASS4", "demolitions_mp,0", "230", when( stat( 257 ) >= 1 ) )
+		LOCKED_LIST_BUTTON( 204, text "@CLASS_CLASS4", when( stat( 257 ) < 1 ) )
+		DEFAULT_CLASS( class_5, edge_5, 230, "@CLASS_CLASS5", "sniper_mp,0", "240", when( stat( 258 ) >= 1 ) )
+		LOCKED_LIST_BUTTON( 230, text "@CLASS_CLASS5", when( stat( 258 ) < 1 ) )
+
+		// Slot 1 opens with custom classes (stat 260), the others unlock one by one.
+		itemDef { rect 30 264 230 14 1 0 text "CUSTOM CLASSES" textfont 0 textscale .17 textaligny 11 forecolor CAPTION_COLOR visible when( stat( 260 ) > 0 ) decoration }
+		CUSTOM_CLASS( custom_1, custom_edge_1, 280, customclass1, "custom1,0", "0", 260 )
+		CUSTOM_CLASS( custom_2, custom_edge_2, 306, customclass2, "custom2,0", "10", 210 )
+		CUSTOM_CLASS( custom_3, custom_edge_3, 332, customclass3, "custom3,0", "20", 220 )
+		CUSTOM_CLASS( custom_4, custom_edge_4, 358, customclass4, "custom4,0", "30", 230 )
+		CUSTOM_CLASS( custom_5, custom_edge_5, 384, customclass5, "custom5,0", "40", 240 )
+
+		BUTTON( button_back, edge_back, 418, "BACK", close self; uiScript openHomeMenu;, 1 )
+
+		#include "ui_mp/unlimited_loadout.inc"
+		FOOTER( "ESC   BACK" )
+	}
+}

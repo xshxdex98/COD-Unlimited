@@ -93,7 +93,8 @@ def run_tool(exe, *args):
                             capture_output=True, text=True, errors="replace", timeout=600,
                             creationflags=subprocess.DETACHED_PROCESS)
     output = result.stdout + result.stderr
-    if result.returncode or "ERROR" in output:
+    # A menu that fails to parse is only reported; the linker still writes the zone.
+    if result.returncode or "ERROR" in output or "Menu load error" in output:
         print(output)
         sys.exit(f"{exe} failed (exit {result.returncode})")
     return output

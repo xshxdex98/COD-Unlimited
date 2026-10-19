@@ -2,3 +2,8 @@
 // It loads after common_mp, so an asset listed here with a stock name replaces the stock one.
 rawfile,codunlimited/version.txt
 menufile,ui_mp/scriptmenus/class.menu
+menufile,ui_mp/scriptmenus/changeclass.menu
+menufile,ui_mp/scriptmenus/changeclass_offline.menu
+menufile,ui_mp/scriptmenus/team_marinesopfor.menu
+menufile,ui_mp/scriptmenus/callvote.menu
+menufile,ui_mp/scriptmenus/muteplayer.menu

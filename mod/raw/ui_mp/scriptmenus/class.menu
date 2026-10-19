@@ -1,90 +1,13 @@
-// The in-game menu (Esc), in the front end's style: actions on a side panel over the blurred
-// match, the tactical map and mode briefing on the right. Replaces the stock "class" menu; the
-// scripts and conditions are the stock ones (raw/ui_mp/scriptmenus/class.menu in the mod tools).
+// The in-game menu (Esc): actions on a side panel over the blurred match, the tactical map and
+// mode briefing on the right. Replaces the stock "class" menu; the scripts and conditions are the
+// stock ones (raw/ui_mp/scriptmenus/class.menu in the mod tools). Every page it opens returns
+// here through uiScript openHomeMenu, which opens the menu Esc would.
 
-#define TEXT_COLOR			.88 .91 .88 1
-#define CAPTION_COLOR		.55 .61 .55 1
-#define DISABLED_COLOR		.40 .45 .42 1
-#define ACCENT				.64 .9 .49 1
-#define ACCENT_OFF			.64 .9 .49 0
-#define PANEL				.035 .052 .047 .72
-#define PANEL_BORDER		.20 .25 .23 .7
-#define FOCUS				.13 .22 .115 .83
-#define FOCUS_BORDER		.40 .57 .33 .85
+#include "ui_mp/unlimited.inc"
 
 #define TEAM_IS_MARINES		(localVarString( ui_team ) == "marines")
 #define TEAM_IS_OPFOR		(localVarString( ui_team ) == "opfor")
 #define MAY_CHOOSE_CLASS	(dvarInt( scr_oldschool ) != 1)
-#define MAP_NAME			"@" + tableLookup( "mp/mapsTable.csv", 0, dvarString( mapname ), 3 )
-#define HAS_UAV				(dvarInt( ui_uav_allies ) && team( name ) == "TEAM_ALLIES") || (dvarInt( ui_uav_axis ) && team( name ) == "TEAM_AXIS") || (dvarInt( ui_uav_client ) && team( name ) == "TEAM_FREE")
-
-#define BUTTON_FOCUS( button, edge ) \
-	setitemcolor nav_buttons backcolor PANEL; setitemcolor nav_buttons bordercolor PANEL_BORDER; \
-	setitemcolor nav_edges backcolor ACCENT_OFF; \
-	setitemcolor button backcolor FOCUS; setitemcolor button bordercolor FOCUS_BORDER; setitemcolor edge backcolor ACCENT;
-
-// Variants of one action (per team, local or remote) share their names so focus colours them all.
-#define BUTTON( button, edge, y, label, actionArg, visArg ) \
-	itemDef { \
-		name			button \
-		group			"nav_buttons" \
-		type			1 \
-		style			1 \
-		rect			28 y 236 28 1 0 \
-		backcolor		PANEL \
-		border			1 \
-		bordersize		.5 \
-		bordercolor		PANEL_BORDER \
-		text			label \
-		textfont		2 \
-		textscale		.25 \
-		textalignx		16 \
-		textaligny		19 \
-		forecolor		TEXT_COLOR \
-		visible			visArg \
-		onFocus			{ BUTTON_FOCUS( button, edge ) play mouse_over; } \
-		action			{ play mouse_click; actionArg } \
-	} \
-	itemDef { \
-		name			edge \
-		group			"nav_edges" \
-		style			1 \
-		rect			28 y 2 28 1 0 \
-		backcolor		ACCENT_OFF \
-		visible			visArg \
-		decoration \
-	}
-
-#define DISABLED_BUTTON( y, label, visArg ) \
-	itemDef { \
-		style			1 \
-		rect			28 y 236 28 1 0 \
-		backcolor		.025 .035 .031 .55 \
-		border			1 \
-		bordersize		.5 \
-		bordercolor		.14 .17 .15 .6 \
-		text			label \
-		textfont		2 \
-		textscale		.25 \
-		textalignx		16 \
-		textaligny		19 \
-		forecolor		DISABLED_COLOR \
-		visible			visArg \
-		decoration \
-	}
-
-#define FILL( x, y, w, h, align, color ) \
-	itemDef { style 1 rect x y w h align backcolor color visible 1 decoration }
-
-#define MINIMAP_LAYER( ownerdrawArg, material, visArg ) \
-	itemDef { \
-		rect			-256 64 220 220 3 0 \
-		forecolor		1 1 1 1 \
-		background		material \
-		ownerdraw		ownerdrawArg \
-		visible			visArg \
-		decoration \
-	}
 
 {
 	menuDef
@@ -104,43 +27,7 @@
 			scriptMenuResponse "back";
 		}
 
-		FILL( 0, 0, 640, 480, 4 4, 0 0 0 .35 )
-
-		// Side panel
-		FILL( 0, 0, 292, 480, 1 4, .012 .02 .018 .82 )
-		FILL( 292, 0, .5, 480, 1 4, .28 .34 .29 .5 )
-		itemDef {
-			rect			28 30 240 14 1 0
-			text			"COD UNLIMITED  /  MATCH"
-			textfont		0
-			textscale		.17
-			textaligny		11
-			forecolor		CAPTION_COLOR
-			visible			1
-			decoration
-		}
-		itemDef {
-			rect			28 48 250 28 1 0
-			exp				text( gametypename() );
-			textfont		2
-			textscale		.40
-			textaligny		24
-			forecolor		.94 .97 .93 1
-			visible			1
-			decoration
-		}
-		itemDef {
-			rect			28 80 250 18 1 0
-			exp				text( MAP_NAME );
-			textfont		0
-			textscale		.22
-			textaligny		14
-			forecolor		ACCENT
-			visible			1
-			decoration
-		}
-		FILL( 29, 104, 23, 1, 1 0, .62 .86 .47 .9 )
-		FILL( 54, 104, 17, 1, 1 0, .24 .36 .25 .5 )
+		PAGE( "COD UNLIMITED  /  MATCH", exp text( gametypename() );, exp text( MAP_NAME ); )
 
 		BUTTON( button_resume, edge_resume, 122, "RESUME", scriptMenuResponse "back";, 1 )
 		BUTTON( button_class, edge_class, 154, "CHOOSE CLASS", scriptMenuResponse "changeclass_marines";, when( TEAM_IS_MARINES && MAY_CHOOSE_CLASS ) )
@@ -150,85 +37,15 @@
 
 		BUTTON( button_controls, edge_controls, 226, "CONTROLS", close self; open main_controls;, 1 )
 		BUTTON( button_options, edge_options, 258, "OPTIONS", close self; open main_options; execnow "set ui_allow_graphic_change 0";, 1 )
-		BUTTON( button_vote, edge_vote, 290, "CALL VOTE", open callvote; close self;, when( dvarBool( ui_allowvote ) ) )
+		BUTTON( button_vote, edge_vote, 290, "CALL VOTE", close self; open callvote;, when( dvarBool( ui_allowvote ) ) )
 		DISABLED_BUTTON( 290, "CALL VOTE", when( !dvarBool( ui_allowvote ) ) )
-		BUTTON( button_mute, edge_mute, 322, "MUTE PLAYERS", open muteplayer; close self;, 1 )
+		BUTTON( button_mute, edge_mute, 322, "MUTE PLAYERS", close self; open muteplayer;, 1 )
 
+		// The confirmation opens over this menu, so No comes straight back here.
 		BUTTON( button_leave, edge_leave, 362, "LEAVE GAME", open popup_endgame;, when( dvarBool( sv_running ) ) )
 		BUTTON( button_leave, edge_leave, 362, "LEAVE GAME", open popup_leavegame;, when( !dvarBool( sv_running ) ) )
 
-		// Tactical map and mode briefing
-		FILL( -268, 34, 244, 352, 3 0, .012 .02 .018 .82 )
-		FILL( -268, 34, 244, .5, 3 0, .28 .34 .29 .5 )
-		itemDef {
-			rect			-256 42 220 14 3 0
-			text			"TACTICAL MAP"
-			textfont		0
-			textscale		.17
-			textaligny		11
-			forecolor		CAPTION_COLOR
-			visible			1
-			decoration
-		}
-		FILL( -256, 64, 220, 220, 3 0, 0 0 0 .5 )
-		MINIMAP_LAYER( 181, "compass_map_default", 1 )
-		itemDef {
-			style			3
-			rect			-256 64 220 220 3 0
-			forecolor		1 1 1 1
-			exp				material( tableLookup( "mp/mapsTable.csv", 0, dvarString( mapname ), 7 ) );
-			visible			1
-			decoration
-		}
-		MINIMAP_LAYER( 182, "objective_line", 1 )
-		MINIMAP_LAYER( 185, "compassping_friendly", 1 )
-		MINIMAP_LAYER( 188, "compassping_enemy", when( dvarBool( ui_hud_hardcore ) == 0 || HAS_UAV ) )
-		MINIMAP_LAYER( 183, "compassping_player", 1 )
-		itemDef {
-			rect			-256 296 220 14 3 0
-			text			"OBJECTIVE"
-			textfont		0
-			textscale		.17
-			textaligny		11
-			forecolor		CAPTION_COLOR
-			visible			1
-			decoration
-		}
-		itemDef {
-			rect			-256 314 220 64 3 0
-			exp				text( gametypedescription() );
-			textfont		0
-			textscale		.19
-			textaligny		12
-			forecolor		.74 .80 .75 1
-			autowrapped
-			visible			1
-			decoration
-		}
-
-		// Footer
-		FILL( 0, 453, 640, 27, 4 4, .01 .015 .013 .83 )
-		FILL( 0, 453, 640, .5, 4 4, .28 .34 .29 .5 )
-		itemDef {
-			rect			28 459 240 15 1 0
-			text			"COD UNLIMITED   |   v0.0.1"
-			textfont		0
-			textscale		.17
-			textaligny		11
-			forecolor		CAPTION_COLOR
-			visible			1
-			decoration
-		}
-		itemDef {
-			rect			-158 459 130 15 3 0
-			text			"ESC   RESUME"
-			textfont		0
-			textscale		.17
-			textalign		2
-			textaligny		11
-			forecolor		CAPTION_COLOR
-			visible			1
-			decoration
-		}
+		MATCH_CARD
+		FOOTER( "ESC   RESUME" )
 	}
 }

@@ -1406,6 +1406,7 @@ void __cdecl UI_LoadIngameMenus(int localClientNum)
                 "(localClientNum == 0)",
                 localClientNum);
         UI_AddMenuList(&uiInfoArray.uiDC, menuList);
+        UI_ThemeIngame(&uiInfoArray.uiDC);
     }
 }
 
@@ -2798,6 +2799,16 @@ void __cdecl UI_RunMenuScript(int localClientNum, const char **args, const char 
         if (!I_stricmp(out,"FrontendSmokeTest"))
         {
             CU_FrontendSmoke(dc);
+            return;
+        }
+        if (!I_stricmp(out, "openHomeMenu"))
+        {
+            // Back out of a page the front end and a match share: in a match to the menu Esc
+            // opens there (the pause menu, or team select), otherwise to the main menu.
+            uiClientState_s cstate;
+            CL_GetClientState(localClientNum, &cstate);
+            if (cstate.connState != CA_ACTIVE || !Menus_OpenByName(dc, CG_ScriptMainMenu(localClientNum)))
+                Menus_OpenByName(dc, "main");
             return;
         }
         if (I_stricmp(out, "StartServer"))

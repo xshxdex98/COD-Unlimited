@@ -378,7 +378,7 @@ static void CU_Conditions(itemDef_s *dst, const itemDef_s *src)
         }
 }
 
-static void CU_Settings(UiContext *dc)
+static void CU_Settings(UiContext *dc, bool overMatch)
 {
     const char *sourceNames[] = {"options_graphics", "options_graphics_texture", "options_sound", "options_voice",
         "options_game", "options_multi", "options_look", "options_move", "options_shoot", "options_misc", "controls_multi"};
@@ -397,6 +397,12 @@ static void CU_Settings(UiContext *dc)
         menuDef_t *stock = sources[page.source];
         if (!stock) continue;
         auto *menu = CU_Menu(dc, stock, page.name, "SETTINGS", "Tune your experience. Related options live together.");
+        if (overMatch)
+        {
+            // In a match the page sits over the blurred game instead of the front-end art.
+            menu->fullScreen = 0; menu->blurRadius = 7;
+            Menu_FindItemByName(menu, "cu_background")->window.style = 0;
+        }
         if (page.merge >= 0 && sources[page.merge])
         {
             menu->onOpen = CU_Script(va("%s %s", stock->onOpen ? stock->onOpen : "", sources[page.merge]->onOpen ? sources[page.merge]->onOpen : ""));
@@ -414,7 +420,7 @@ static void CU_Settings(UiContext *dc)
             }
             menu->onOpen=CU_Script(open.c_str());
         }
-        menu->onESC = CU_Script("close self; close main_options; close main_controls; open main;");
+        menu->onESC = CU_Script("close self; close main_options; close main_controls; uiScript openHomeMenu;");
         for (int tab = 0; tab < 4; ++tab)
             CU_Button(menu, va("cu_tab_%i",tab), tabNames[tab],
                 va("close self; close main_options; close main_controls; open %s;", tabTargets[tab]), 26.0f + 149 * tab, 94, 143, page.group == tab);
@@ -502,7 +508,7 @@ static void CU_Settings(UiContext *dc)
                 if (stock->items[i]->window.ownerDraw==250)
                     CU_Control(menu,stock->items[i],"keyBindStatus",295,418,310,24);
         }
-        CU_Button(menu,"cu_back","BACK","close self; close main_options; close main_controls; open main;",26,420,90);
+        CU_Button(menu,"cu_back","BACK","close self; close main_options; close main_controls; uiScript openHomeMenu;",26,420,90);
         CU_Replace(dc,menu);
     }
 }
@@ -715,7 +721,8 @@ static void CU_Dialogs(UiContext *dc)
         if (!name || stock->itemCount>=250) continue;
         bool dialog=strstr(name,"popmenu") || strstr(name,"popup") || (!strncmp(name,"settings_quick_",15) && strchr(name+15,'_'))
             || !strcmp(name,"cdkey_menu") || !strcmp(name,"options_control_defaults") || !strcmp(name,"options_graphics_defaults");
-        if (!dialog || !strcmp(name,"filter_popmenu")) continue;
+        // The end-of-match summary and unlock popups are laid out on their own art.
+        if (!dialog || !strcmp(name,"filter_popmenu") || !strncmp(name,"popup_summary",13) || !strncmp(name,"popup_unlock",12)) continue;
         auto *menu=(menuDef_t *)UI_Alloc(sizeof(menuDef_t),4); *menu=*stock;
         menu->items=(itemDef_s **)UI_Alloc(256*sizeof(itemDef_s *),4); menu->itemCount=0;
         CU_Color(menu->focusColor,.72f,.94f,.58f); CU_Color(menu->disableColor,.38f,.43f,.39f);
@@ -902,11 +909,20 @@ static void UI_ThemeFrontend(UiContext *dc)
     Dvar_RegisterString("ui_selectedMod","",DVAR_NOFLAG,"Selected mod in the front end");
     CU_MainAlias(dc);
     Com_Printf(CON_CHANNEL_UI,"Theming Local Play\n"); CU_LocalPlay(dc);
-    Com_Printf(CON_CHANNEL_UI,"Theming Settings\n"); CU_Settings(dc);
+    Com_Printf(CON_CHANNEL_UI,"Theming Settings\n"); CU_Settings(dc, false);
     Com_Printf(CON_CHANNEL_UI,"Theming Server Browser\n"); CU_ServerBrowser(dc);
     Com_Printf(CON_CHANNEL_UI,"Theming Mods\n"); CU_Mods(dc);
     Com_Printf(CON_CHANNEL_UI,"Theming Barracks\n"); CU_Barracks(dc);
     CU_GameRules(dc);
     CU_Dialogs(dc);
     s_cuFrontendThemed = true;
+}
+
+// A map load restarts the UI with the match's own copies of the settings pages and dialogs
+// (ui_mp/ingame.txt). The script menus (pause, class, team) are themed in their .menu files.
+static void UI_ThemeIngame(UiContext *dc)
+{
+    if (Dvar_GetString("fs_game")[0] || !FS_FileExists((char *)"ui_mp/scriptmenus/main.menu")) return;
+    CU_Settings(dc, true);
+    CU_Dialogs(dc);
 }

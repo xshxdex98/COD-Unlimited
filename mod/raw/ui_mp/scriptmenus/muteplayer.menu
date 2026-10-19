@@ -1,0 +1,49 @@
+// Mute Players: the match's players in a card, muted or not; toggling keeps the menu open so
+// several can be muted in a row. The list and uiScript mutePlayer are the stock ones
+// (raw/ui_mp/scriptmenus/muteplayer.menu in the mod tools).
+
+#include "ui_mp/unlimited.inc"
+
+{
+	menuDef
+	{
+		name			"muteplayer"
+		rect			0 0 640 480
+		focuscolor		.94 .98 .91 1
+		style			0
+		blurWorld		7.0
+		onOpen
+		{
+			focusFirst;
+			BUTTON_FOCUS( button_mute, edge_mute )
+		}
+		onEsc
+		{
+			close self;
+			uiScript openHomeMenu;
+		}
+
+		PAGE( "COD UNLIMITED  /  MATCH", text "MUTE PLAYERS", exp text( MAP_NAME ); )
+
+		BUTTON( button_mute, edge_mute, 122, "TOGGLE MUTE", uiScript mutePlayer;, 1 )
+		itemDef {
+			rect			28 160 236 40 1 0
+			text			"Pick a player on the right, then toggle. Double-click works too."
+			textfont		0
+			textscale		.19
+			textaligny		12
+			forecolor		BODY_COLOR
+			autowrapped
+			visible			1
+			decoration
+		}
+		BUTTON( button_back, edge_back, 418, "BACK", close self; uiScript openHomeMenu;, 1 )
+
+		CARD( 34, 384 )
+		CAPTION( -256, 42, 220, 3 0, "PLAYERS" )
+		// Column 1 is the name, column 0 says whether the player is muted.
+		CARD_LIST( playermutelist, 58, 350, 20, 2 160 56 10 0 4 150 25 0, uiScript mutePlayer; )
+
+		FOOTER( "ESC   BACK" )
+	}
+}

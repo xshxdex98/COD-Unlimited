@@ -1,0 +1,56 @@
+// Team select: join a team, auto-assign or spectate, with the tactical map on the right. It is
+// also the Esc menu while spectating, so spectators get Controls, Options and Leave Game here.
+// Responses and conditions are the stock ones (raw/ui_mp/scriptmenus/team_marinesopfor.menu in
+// the mod tools); _menus.gsc answers to this name.
+
+#include "ui_mp/unlimited.inc"
+
+#define IS_ALLIES			(team( name ) == "TEAM_ALLIES")
+#define ON_TEAM				(team( name ) == "TEAM_ALLIES" || team( name ) == "TEAM_AXIS")
+#define SPECTATING			(team( name ) == "TEAM_SPECTATOR")
+#define MAY_SPECTATE		dvarBool( scr_game_spectatetype )
+#define ALLIES_NAME			exp text( "@" + dvarString( g_TeamName_Allies ) );
+#define AXIS_NAME			exp text( "@" + dvarString( g_TeamName_Axis ) );
+
+{
+	menuDef
+	{
+		name			"team_marinesopfor"
+		rect			0 0 640 480
+		focuscolor		.94 .98 .91 1
+		style			0
+		blurWorld		7.0
+		onOpen
+		{
+			focusFirst;
+			BUTTON_FOCUS( button_team_a, edge_team_a )
+		}
+		onEsc
+		{
+			scriptMenuResponse "back";
+		}
+
+		PAGE( "COD UNLIMITED  /  MATCH", text "CHOOSE TEAM", exp text( MAP_NAME ); )
+
+		// Players on a team see the other team first; everyone else sees both.
+		NAV_BUTTON( button_team_a, edge_team_a, 28, 122, 236, 28, 19, ALLIES_NAME, scriptMenuResponse "allies";, ;, when( !IS_ALLIES ) )
+		NAV_BUTTON( button_team_a, edge_team_a, 28, 122, 236, 28, 19, AXIS_NAME, scriptMenuResponse "axis";, ;, when( IS_ALLIES ) )
+		NAV_BUTTON( button_team_b, edge_team_b, 28, 154, 236, 28, 19, AXIS_NAME, scriptMenuResponse "axis";, ;, when( !ON_TEAM ) )
+		BUTTON( button_team_b, edge_team_b, 154, "AUTO-ASSIGN", scriptMenuResponse "autoassign";, when( ON_TEAM ) )
+		BUTTON( button_team_c, edge_team_c, 186, "AUTO-ASSIGN", scriptMenuResponse "autoassign";, when( !ON_TEAM ) )
+		BUTTON( button_team_c, edge_team_c, 186, "SPECTATE", scriptMenuResponse "spectator";, when( ON_TEAM && MAY_SPECTATE ) )
+		BUTTON( button_team_d, edge_team_d, 218, "SPECTATE", scriptMenuResponse "spectator";, when( !ON_TEAM && !SPECTATING && MAY_SPECTATE ) )
+
+		BUTTON( button_controls, edge_controls, 258, "CONTROLS", close self; open main_controls;, when( SPECTATING ) )
+		BUTTON( button_options, edge_options, 290, "OPTIONS", close self; open main_options; execnow "set ui_allow_graphic_change 0";, when( SPECTATING ) )
+		BUTTON( button_leave, edge_leave, 330, "LEAVE GAME", open popup_endgame;, when( SPECTATING && dvarBool( sv_running ) ) )
+		BUTTON( button_leave, edge_leave, 330, "LEAVE GAME", open popup_leavegame;, when( SPECTATING && !dvarBool( sv_running ) ) )
+
+		// Back returns to the pause menu; with no team there is none, so it closes the menu.
+		BUTTON( button_back, edge_back, 418, "BACK", close self; uiScript openHomeMenu;, when( !SPECTATING ) )
+		BUTTON( button_back, edge_back, 418, "BACK", scriptMenuResponse "back";, when( SPECTATING ) )
+
+		MATCH_CARD
+		FOOTER( "ESC   CLOSE" )
+	}
+}

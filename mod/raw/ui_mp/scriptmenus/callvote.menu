@@ -1,0 +1,114 @@
+// Call Vote and its three pickers (map, mode and map, player to kick), sharing one side panel.
+// Vote commands and the engine lists are the stock ones (raw/ui_mp/scriptmenus/callvote.menu in
+// the mod tools); this file must keep defining all four menus it replaces.
+
+#include "ui_mp/unlimited.inc"
+
+#define VOTE_PAGE \
+	PAGE( "COD UNLIMITED  /  MATCH", text "CALL VOTE", exp text( MAP_NAME ); ) \
+	BUTTON( vote_restart, vote_restart_edge, 122, "RESTART MAP", exec "cmd callvote map_restart"; close self;, 1 ) \
+	BUTTON( vote_next, vote_next_edge, 154, "NEXT MAP", exec "cmd callvote map_rotate"; close self;, 1 ) \
+	BUTTON( vote_map, vote_map_edge, 194, "CHANGE MAP", close self; open changemap;, 1 ) \
+	BUTTON( vote_mode, vote_mode_edge, 226, "CHANGE MODE", close self; open changegametype;, 1 ) \
+	BUTTON( vote_kick, vote_kick_edge, 258, "KICK PLAYER", close self; open kickplayer;, 1 ) \
+	BUTTON( button_back, edge_back, 418, "BACK", close self; uiScript openHomeMenu;, 1 ) \
+	FOOTER( "ESC   BACK" )
+
+// A picker opens with its own button lit and Esc steps back to the vote list.
+#define PICKER( menuName, button, edge ) \
+	name			menuName \
+	rect			0 0 640 480 0 0 \
+	focuscolor		.94 .98 .91 1 \
+	style			0 \
+	blurWorld		7.0 \
+	onOpen			{ BUTTON_FOCUS( button, edge ) } \
+	onEsc			{ close self; open callvote; } \
+	VOTE_PAGE
+
+{
+	menuDef
+	{
+		name			"callvote"
+		rect			0 0 640 480
+		focuscolor		.94 .98 .91 1
+		style			0
+		blurWorld		7.0
+		onOpen
+		{
+			focusFirst;
+			BUTTON_FOCUS( vote_restart, vote_restart_edge )
+		}
+		onEsc
+		{
+			close self;
+			uiScript openHomeMenu;
+		}
+
+		VOTE_PAGE
+
+		CARD( 34, 96 )
+		CAPTION( -256, 42, 220, 3 0, "HOW VOTING WORKS" )
+		itemDef {
+			rect			-256 60 220 64 3 0
+			text			"Call a vote and every player decides. Vote yes with F1 and no with F2 while it runs."
+			textfont		0
+			textscale		.19
+			textaligny		12
+			forecolor		BODY_COLOR
+			autowrapped
+			visible			1
+			decoration
+		}
+	}
+
+	menuDef
+	{
+		PICKER( "changemap", vote_map, vote_map_edge )
+
+		CARD( 34, 384 )
+		CAPTION( -256, 42, 220, 3 0, "MAP" )
+		CARD_LIST( maplist, 58, 300, 4, 1 4 210 25 0, ; )
+		CARD_BUTTON( vote_call, 376, "CALL VOTE", close self; uiScript voteMap; )
+	}
+
+	menuDef
+	{
+		PICKER( "changegametype", vote_mode, vote_mode_edge )
+
+		CARD( 34, 384 )
+		CAPTION( -256, 42, 220, 3 0, "MAP" )
+		CARD_LIST( maplist2, 58, 254, 4, 1 4 210 25 0, ; )
+		CAPTION( -256, 318, 220, 3 0, "MODE  (CLICK TO CHANGE)" )
+		// The engine draws the mode name and cycles it on click.
+		itemDef {
+			name			mode_select
+			rect			-256 334 220 26 3 0
+			style			1
+			backcolor		PANEL
+			border			1
+			bordersize		.5
+			bordercolor		PANEL_BORDER
+			ownerdraw		245
+			textfont		1
+			textscale		.24
+			textalignx		8
+			textaligny		19
+			forecolor		TEXT_COLOR
+			visible			1
+			onFocus			{ setitemcolor mode_select bordercolor ACCENT; play mouse_over; }
+			leaveFocus		{ setitemcolor mode_select bordercolor PANEL_BORDER; }
+			action			{ play mouse_click; }
+		}
+		CARD_BUTTON( vote_call, 376, "CALL VOTE", close self; uiScript voteTypeMap; )
+	}
+
+	menuDef
+	{
+		PICKER( "kickplayer", vote_kick, vote_kick_edge )
+
+		CARD( 34, 384 )
+		CAPTION( -256, 42, 220, 3 0, "PLAYER" )
+		CARD_LIST( playerlist, 58, 300, 7, 1 4 210 25 0, ; )
+		CARD_BUTTON( vote_call, 376, "CALL VOTE", close self; uiScript voteTempBan; )
+	}
+}
