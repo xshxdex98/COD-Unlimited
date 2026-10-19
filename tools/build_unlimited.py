@@ -7,13 +7,16 @@ source_data/ and texture_assets/ for the converter and zone_source/ with the ass
 folder is put together under build/linker each time, so nothing stale gets linked in.
 
 Materials go into the fastfile; the game loads their images from images/*.iwi through the file
-system, so those ship in the .iwd.
+system, so those ship in the .iwd. Generated art (tools/art) is rendered into the workspace and
+listed alongside mod/'s own assets.
 """
 import shutil
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+from art import rank_icons
 
 ROOT = Path(__file__).resolve().parents[1]
 ZONE = "unlimited_mp"
@@ -37,6 +40,29 @@ def clean_workspace():
         if junction.is_junction():
             junction.rmdir()
     shutil.rmtree(WORK, ignore_errors=True)
+
+
+def material_entry(name, color_map):
+    """A GDT entry for a HUD or menu image: clamped and never reduced by texture quality, like the
+    stock rank icons, but with mipmaps so it stays clean when drawn small."""
+    fields = {"materialType": "2d", "surfaceType": "<none>", "usage": "<not in editor>",
+              "colorMap": color_map.replace("/", "\\\\"), "tileColor": "no tile", "nopicmipColor": "1"}
+    lines = [f'\t"{name}" ( "material.gdf" )', "\t{", *(f'\t\t"{key}" "{value}"' for key, value in fields.items()), "\t}"]
+    return "\n".join(lines) + "\n"
+
+
+def write_generated_art():
+    """Renders the generated icons and their materials into the workspace; returns their zone entries."""
+    folder = "texture_assets/unlimited/ranks"
+    (WORK / folder).mkdir(parents=True)
+    names, entries = [], []
+    for name, image in rank_icons.icons():
+        image.save(WORK / folder / f"{name}.tga")
+        names.append(name)
+        entries.append(material_entry(name, f"{folder}/{name}.tga"))
+    (WORK / "source_data").mkdir(exist_ok=True)
+    (WORK / "source_data" / "unlimited_generated.gdt").write_text("{\n" + "".join(entries) + "}\n")
+    return [f"material,{name}" for name in names]
 
 
 def run_tool(exe, *args):
@@ -75,11 +101,12 @@ def main():
     for name in ["source_data", "texture_assets"]:
         if (MOD / name).exists():
             shutil.copytree(MOD / name, WORK / name)
+    generated = write_generated_art()
     (WORK / "zone_source" / "english" / "assetlist").mkdir(parents=True)     # the linker writes its asset list here
-    shutil.copy(MOD / f"{ZONE}.csv", WORK / "zone_source" / f"{ZONE}.csv")
+    assets = (MOD / f"{ZONE}.csv").read_text().splitlines() + generated
+    (WORK / "zone_source" / f"{ZONE}.csv").write_text("\n".join(assets) + "\n")
 
-    if list((WORK / "source_data").glob("*.gdt")):
-        run_tool("converter.exe", "-nopause")
+    run_tool("converter.exe", "-nopause")
     run_tool("linker_pc.exe", "-language", "english", "-compress", "-cleanup", ZONE)
     built = WORK / "zone" / "english" / f"{ZONE}.ff"
     if not built.exists():
