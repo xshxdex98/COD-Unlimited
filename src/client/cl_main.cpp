@@ -1071,6 +1071,7 @@ static void CL_SetFastFileNames(GfxConfiguration *config, bool dedicatedServer)
     config->commonFastFileName = "common";
     config->localizedCodeFastFileName = NULL;
     config->localizedCommonFastFileName = NULL;
+    config->unlimitedFastFileName = NULL;
     config->modFastFileName = DB_ModFileExists() != 0 ? "mod" : NULL;
 }
 

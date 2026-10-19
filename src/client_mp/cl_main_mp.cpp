@@ -2308,6 +2308,7 @@ static void CL_SetFastFileNames(GfxConfiguration *config, bool dedicatedServer)
     config->commonFastFileName = "common_mp";
     config->localizedCodeFastFileName = "localized_code_post_gfx_mp";
     config->localizedCommonFastFileName = "localized_common_mp";
+    config->unlimitedFastFileName = DB_ZoneFileExists("unlimited_mp") ? "unlimited_mp" : NULL;
     config->modFastFileName = DB_ModFileExists() != 0 ? "mod" : NULL;
 }
 

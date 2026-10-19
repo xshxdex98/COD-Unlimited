@@ -3643,7 +3643,7 @@ char __cdecl R_CreateGameWindow(GfxWindowParms *wndParms)
 
 void R_LoadGraphicsAssets()
 {
-    XZoneInfo zoneInfo[6]{ 0 }; // [esp+0h] [ebp-50h] BYREF
+    XZoneInfo zoneInfo[7]{ 0 };
     uint32_t zoneCount; // [esp+4Ch] [ebp-4h]
 
     zoneInfo[0].name = gfxCfg.codeFastFileName;
@@ -3675,6 +3675,16 @@ void R_LoadGraphicsAssets()
     {
         zoneInfo[zoneCount].name = gfxCfg.localizedCommonFastFileName;
         zoneInfo[zoneCount].allocFlags = DB_ZONE_COMMON_LOC;
+        zoneInfo[zoneCount].freeFlags = 0;
+        zoneCount++;
+    }
+
+    // Loaded after common_mp with the same flags, so its assets replace the stock ones;
+    // a mod's fastfile still replaces both.
+    if (gfxCfg.unlimitedFastFileName)
+    {
+        zoneInfo[zoneCount].name = gfxCfg.unlimitedFastFileName;
+        zoneInfo[zoneCount].allocFlags = DB_ZONE_COMMON;
         zoneInfo[zoneCount].freeFlags = 0;
         zoneCount++;
     }

@@ -153,6 +153,7 @@ void __cdecl DB_EnumXAssetsFor(
 
 int32_t __cdecl DB_FileSize(const char *zoneName, int32_t isMod);
 bool __cdecl DB_ModFileExists();
+bool DB_ZoneFileExists(const char *zoneName);
 
 void __cdecl Load_GetCurrentZoneHandle(uint8_t *handle);
 

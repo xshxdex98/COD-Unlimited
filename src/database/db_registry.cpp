@@ -671,6 +671,15 @@ bool __cdecl DB_ModFileExists()
     return 1;
 }
 
+// A fastfile in zone\<language>\ (or a user map's zone).
+bool DB_ZoneFileExists(const char *zoneName)
+{
+    char filename[256];
+
+    DB_BuildOSPath(zoneName, sizeof(filename), filename);
+    return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
+}
+
 void __cdecl DB_EndRecoverLostDevice()
 {
     int32_t zoneIter; // [esp+4h] [ebp-4h]

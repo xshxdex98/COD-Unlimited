@@ -1,0 +1,3 @@
+// COD Unlimited's own content, built into zone\english\unlimited_mp.ff by tools/build_unlimited.py.
+// It loads after common_mp, so an asset listed here with a stock name replaces the stock one.
+rawfile,codunlimited/version.txt
