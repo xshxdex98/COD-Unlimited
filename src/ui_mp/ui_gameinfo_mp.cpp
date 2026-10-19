@@ -275,7 +275,8 @@ void __cdecl UI_LoadArenas()
         const char *display = Info_ValueForKey(ui_arenaInfos[n], "longname");
         const std::string friendly = UI_FriendlyMapName(map.mapLoadName);
         map.mapName = String_Alloc(*display && I_stricmp(display, map.mapLoadName) ? display : friendly.c_str());
-        map.imageName = String_Alloc(va("loadscreen_%s", map.mapLoadName));
+        const char *loadscreen = Info_ValueForKey(ui_arenaInfos[n], "loadscreen");
+        map.imageName = String_Alloc(*loadscreen ? loadscreen : va("loadscreen_%s", map.mapLoadName));
         char path[512];
         if (!FS_MapZonePath(map.mapLoadName, path, sizeof(path)))
             map.levelShot = Material_RegisterHandle(map.imageName, IMAGE_TRACK_UI);

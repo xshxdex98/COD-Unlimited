@@ -4249,7 +4249,7 @@ Material *__cdecl UI_GetLevelShot(int index)
     if (FS_MapZonePath(mapName, path, sizeof(path)))
     {
         FS_SetActiveMap(mapName);
-        return Material_RegisterMapPreview(mapName);
+        return Material_RegisterMapPreview(sharedUiInfo.mapList[index].imageName);
     }
     if (!sharedUiInfo.serverHardwareIconList[40 * index - 5082])
         sharedUiInfo.serverHardwareIconList[40 * index - 5082] = Material_RegisterHandle(

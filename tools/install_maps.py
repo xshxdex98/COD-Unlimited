@@ -3,7 +3,8 @@
     py tools/install_maps.py <folder with the extracted map downloads> [game folder]   (default bin/Debug)
 
 Each map gets zone/maps/<map>/ with its two zones, its iwds and an arena that lists it with its
-display name (a localized string built into unlimited_mp.ff) and the gametypes it supports. Iwds
+display name (a localized string built into unlimited_mp.ff), the gametypes it supports and the
+loading screen image the menus preview it with. Iwds
 stay in the map's folder because they often replace stock images: the game only searches them
 while that map is loaded. The maps are third-party content, so they are not in this repository.
 """
@@ -11,6 +12,8 @@ import csv
 import re
 import shutil
 import sys
+import zipfile
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +39,23 @@ def find_zone(source, name):
     return found[0]
 
 
+def loadscreen(name, load_zone, iwds):
+    """The image the map's load zone shows while loading, when its iwds have it. Most are
+    loadscreen_<map>, but remakes often name it their own way (bo2drone_loadscreen)."""
+    zone = zlib.decompress(load_zone.read_bytes()[12:])
+    referenced = {text.decode().lower() for text in re.findall(rb"[\w\-#&$~.]{4,}(?=\x00)", zone)}
+    images = set()
+    for iwd in iwds:
+        with zipfile.ZipFile(iwd) as archive:
+            images |= {Path(entry).stem.lower() for entry in archive.namelist()
+                       if entry.lower().startswith("images/") and entry.lower().endswith(".iwi")}
+    found = sorted(referenced & images)
+    preferred = f"loadscreen_{name}"
+    if preferred in found:
+        return preferred
+    return found[0] if len(found) == 1 else None
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -55,9 +75,12 @@ def main():
         target.mkdir(parents=True)
         for file in files:
             shutil.copy2(file, target / file.name)
-        (target / f"{name}.arena").write_text(
-            f'{{\n\tmap\t\t\t"{name}"\n\tlongname\t"{key}"\n\tgametype\t"{GAMETYPES}"\n}}\n')
-        print(f"{display:14} {name}: {', '.join(file.name for file in files[2:])}")
+        image = loadscreen(name, files[1], files[2:])
+        arena = [f'\tmap\t\t\t"{name}"', f'\tlongname\t"{key}"', f'\tgametype\t"{GAMETYPES}"']
+        if image:
+            arena.append(f'\tloadscreen\t"{image}"')
+        (target / f"{name}.arena").write_text("{\n" + "\n".join(arena) + "\n}\n")
+        print(f"{display:14} {name}: {', '.join(file.name for file in files[2:])}, preview {image or 'MISSING'}")
 
     listed = {name for name, _, _ in maps}
     for folder in sorted(installed.iterdir()):

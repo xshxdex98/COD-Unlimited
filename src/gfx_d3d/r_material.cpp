@@ -668,17 +668,17 @@ static Material *Material_RegisterMenuArtwork(const char *name)
 }
 #endif
 
-Material *Material_RegisterMapPreview(const char *mapName)
+// imageName is the map's loading screen; its iwds must be searchable (FS_SetActiveMap).
+Material *Material_RegisterMapPreview(const char *imageName)
 {
 #ifdef KISAK_MP
-    char name[96];
-    Com_sprintf(name, sizeof(name), "loadscreen_%s", mapName);
     for (unsigned int i = 0; i < s_mapArtworkCount; ++i)
-        if (!strcmp(s_mapArtwork[i].name, name)) return Material_LoadMenuArtwork(s_mapArtwork[i]);
-    if (s_mapArtworkCount < 128 && FS_FileExists(va("images/%s.iwi", name)))
+        if (!strcmp(s_mapArtwork[i].name, imageName)) return Material_LoadMenuArtwork(s_mapArtwork[i]);
+    if (s_mapArtworkCount < 128 && strlen(imageName) < sizeof(s_mapArtworkNames[0])
+        && FS_FOpenFileRead(va("images/%s.iwi", imageName), nullptr) == 1)
     {
         unsigned int index = s_mapArtworkCount++;
-        I_strncpyz(s_mapArtworkNames[index], name, sizeof(s_mapArtworkNames[index]));
+        I_strncpyz(s_mapArtworkNames[index], imageName, sizeof(s_mapArtworkNames[index]));
         s_mapArtwork[index].name = s_mapArtworkNames[index];
         return Material_LoadMenuArtwork(s_mapArtwork[index]);
     }
