@@ -117,6 +117,8 @@ def main():
     link(WORK / "main", game / "main")
     # The stock files the linker reads (tools/extract_rawfiles.py), with ours over them.
     shutil.copytree(STOCK, WORK / "raw")
+    # Stock materials a menu uses are linked in with it, from the mod tools' definitions.
+    shutil.copytree(SDK / "raw" / "materials", WORK / "raw" / "materials", dirs_exist_ok=True)
     shutil.copytree(MOD / "raw", WORK / "raw", dirs_exist_ok=True)
     for name in SDK_LINKS:
         link(WORK / name, SDK / name)
