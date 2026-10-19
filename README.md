@@ -1,9 +1,7 @@
 # COD:Reborn built from KisakCOD
 
 ## About the project
-An open source fully-buildable reimplementation of Call of Duty 4
-
-Aimed towards mod developers and COD4 enthusiasts.
+A forked and heavily modified COD4 client, with new gamemodes, weapons, and progression system.
 
 ![licimg](./GPLv3_Logo.png)
 
