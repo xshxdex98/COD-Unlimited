@@ -2865,6 +2865,7 @@ void __cdecl R_Shutdown(int destroyWindow)
         R_SaveLightVisHistory();
         R_ShutdownLightDefs();
         R_ShutdownWorld();
+        R_ReleaseMenuArtwork();
         if (!IsFastFileLoad())
         {
             R_ShutdownLoadWater();

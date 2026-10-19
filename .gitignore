@@ -432,3 +432,10 @@ KisakCOD/.idea/*
 build-radiant/
 KisakCOD/
 radiant_artifacts/
+
+# COD Unlimited: local tools, logs and generated data
+/powershell.exe
+/diagnostics/
+/tools/cod4-mod-tools/bin/
+/tools/iw4_map_bridge/target/
+/assets/maps/*/iw4-intermediate/

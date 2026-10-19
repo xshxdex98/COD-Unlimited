@@ -7,9 +7,173 @@
 #include <universal/q_parse.h>
 #include <database/database.h>
 #include <universal/com_files.h>
+#include <win32/win_local.h>
+#include <qcommon/unzip.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 int ui_numArenas;
-char *ui_arenaInfos[64];
+char *ui_arenaInfos[128];
+
+static bool UI_ValidMapName(const char *name)
+{
+    if (!name || !*name || strlen(name) >= 60) return false;
+    for (const char *p = name; *p; ++p)
+        if (!isalnum((unsigned char)*p) && *p != '_' && *p != '-') return false;
+    return true;
+}
+
+static std::string UI_FriendlyMapName(const char *name)
+{
+    if (!I_strnicmp(name, "mp_", 3)) name += 3;
+    std::string display;
+    bool wordStart = true;
+    for (const unsigned char *p = (const unsigned char *)name; *p; ++p)
+    {
+        if (*p == '_' || *p == '-')
+        {
+            if (!display.empty() && display.back() != ' ') display += ' ';
+            wordStart = true;
+        }
+        else
+        {
+            display += wordStart ? (char)toupper(*p) : (char)*p;
+            wordStart = false;
+        }
+    }
+    if (!display.empty() && display.back() == ' ') display.pop_back();
+    return display;
+}
+
+static void UI_MergeArenaText(const char *text, const char *onlyMap = nullptr, bool existingOnly = false)
+{
+    char *parsed[128];
+    const int count = UI_ParseInfos(text, 128, parsed);
+    for (int i = 0; i < count; ++i)
+    {
+        char name[64];
+        I_strncpyz(name, Info_ValueForKey(parsed[i], "map"), sizeof(name));
+        if (!UI_ValidMapName(name) || (onlyMap && I_stricmp(name, onlyMap))) continue;
+        int index = 0;
+        for (; index < ui_numArenas; ++index)
+            if (!I_stricmp(name, Info_ValueForKey(ui_arenaInfos[index], "map"))) break;
+        if (existingOnly && index == ui_numArenas) continue;
+        if (index < 128)
+        {
+            ui_arenaInfos[index] = parsed[i];
+            if (index == ui_numArenas) ++ui_numArenas;
+        }
+    }
+}
+
+static void UI_LoadLooseArenaMetadata()
+{
+    char list[32768];
+    int count = FS_GetFileList("mp", "arena", FS_LIST_ALL, list, sizeof(list));
+    const char *name = list;
+    for (int i = 0; i < count; ++i)
+    {
+        char path[256];
+        Com_sprintf(path, sizeof(path), "mp/%s", name);
+        int file = 0;
+        int length = FS_FOpenFileByMode(path, &file, FS_READ);
+        if (file)
+        {
+            if (length > 0 && length <= 8192)
+            {
+                char text[8193];
+                int read = FS_Read((unsigned char *)text, length, file);
+                if (read == length) { text[length] = 0; UI_MergeArenaText(text, nullptr, true); }
+            }
+            FS_FCloseFile(file);
+        }
+        name += strlen(name) + 1;
+    }
+}
+
+static void UI_ReadArenaFile(const char *path, const char *map)
+{
+    FILE *file = fopen(path, "rb");
+    if (!file) return;
+    char text[8193];
+    size_t size = fread(text, 1, sizeof(text) - 1, file);
+    const bool complete = !ferror(file) && fgetc(file) == EOF;
+    fclose(file);
+    if (complete) { text[size] = 0; UI_MergeArenaText(text, map); }
+}
+
+static void UI_LoadInstalledMapArenas()
+{
+    const char *roots[] = { fs_basepath->current.string, fs_homepath->current.string };
+    for (int root = 0; root < 2; ++root)
+    {
+        if (root && !I_stricmp(roots[0], roots[1])) continue;
+        char pattern[512];
+        Com_sprintf(pattern, sizeof(pattern), "%s/usermaps/*", roots[root]);
+        WIN32_FIND_DATAA entry;
+        HANDLE search = FindFirstFileA(pattern, &entry);
+        if (search == INVALID_HANDLE_VALUE) continue;
+        std::vector<std::string> names;
+        do {
+            if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && UI_ValidMapName(entry.cFileName))
+                names.emplace_back(entry.cFileName);
+        } while (FindNextFileA(search, &entry));
+        FindClose(search);
+        std::sort(names.begin(), names.end());
+        for (const std::string &name : names)
+        {
+            char path[512];
+            Com_sprintf(path, sizeof(path), "%s/usermaps/%s/%s.ff", roots[root], name.c_str(), name.c_str());
+            FILE *file = fopen(path, "rb");
+            if (!file) continue;
+            unsigned char header[12];
+            const bool compatible = fread(header, 1, sizeof(header), file) == sizeof(header)
+                && (!memcmp(header, "IWffu100", 8) || !memcmp(header, "IWffs100", 8))
+                && header[8] == 5 && !header[9] && !header[10] && !header[11];
+            fclose(file);
+            if (!compatible) continue; // An IW4 .ff is not an installed IW3 map.
+            int index = 0;
+            for (; index < ui_numArenas; ++index)
+                if (!I_stricmp(name.c_str(), Info_ValueForKey(ui_arenaInfos[index], "map"))) break;
+            if (index == ui_numArenas && ui_numArenas < 128)
+                UI_MergeArenaText(va("{ map \"%s\" longname \"%s\" }", name.c_str(), name.c_str()));
+            Com_sprintf(path, sizeof(path), "%s/usermaps/%s/*", roots[root], name.c_str());
+            search = FindFirstFileA(path, &entry);
+            if (search == INVALID_HANDLE_VALUE) continue;
+            do {
+                if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                const char *extension = strrchr(entry.cFileName, '.');
+                if (!extension) continue;
+                Com_sprintf(path, sizeof(path), "%s/usermaps/%s/%s", roots[root], name.c_str(), entry.cFileName);
+                if (!I_stricmp(extension, ".arena")) UI_ReadArenaFile(path, name.c_str());
+                else if (!I_stricmp(extension, ".iwd"))
+                {
+                    unzFile zip = unzOpen(path);
+                    if (!zip) continue;
+                    if (unzGoToFirstFile(zip) == UNZ_OK) do {
+                        unz_file_info info;
+                        char member[256];
+                        if (unzGetCurrentFileInfo(zip, &info, member, sizeof(member), nullptr, 0, nullptr, 0) != UNZ_OK) break;
+                        member[sizeof(member)-1] = 0;
+                        const char *suffix = strrchr(member, '.');
+                        if (suffix && !I_stricmp(suffix, ".arena") && info.uncompressed_size <= 8192 && unzOpenCurrentFile(zip) == UNZ_OK)
+                        {
+                            char text[8193];
+                            int length = unzReadCurrentFile(zip, text, info.uncompressed_size);
+                            int result = unzCloseCurrentFile(zip);
+                            if (length == (int)info.uncompressed_size && result == UNZ_OK)
+                            { text[length] = 0; UI_MergeArenaText(text, name.c_str()); }
+                        }
+                    } while (unzGoToNextFile(zip) == UNZ_OK);
+                    unzClose(zip);
+                }
+            } while (FindNextFileA(search, &entry));
+            FindClose(search);
+        }
+    }
+    Com_Printf(CON_CHANNEL_UI, "Map catalog: %i stock and installed maps\n", ui_numArenas);
+}
 
 int __cdecl UI_ParseInfos(const char *buf, int max, char **infos)
 {
@@ -74,60 +238,36 @@ int __cdecl UI_ParseInfos(const char *buf, int max, char **infos)
 
 void __cdecl UI_LoadArenas()
 {
-    const char *v0; // eax
-    const char *v1; // eax
-    const char *v2; // eax
-    const char *v3; // eax
-    const char *pszText; // [esp+0h] [ebp-14h] BYREF
-    const char *pszGameTypes; // [esp+4h] [ebp-10h]
-    int i; // [esp+8h] [ebp-Ch]
-    int n; // [esp+Ch] [ebp-8h]
-    const char *pszToken; // [esp+10h] [ebp-4h]
-
     sharedUiInfo.mapCount = 0;
     UI_LoadArenasFromFile();
-    for (n = 0; n < ui_numArenas; ++n)
+    for (int n = 0; n < ui_numArenas && sharedUiInfo.mapCount < 128; ++n)
     {
-        v0 = Info_ValueForKey(ui_arenaInfos[n], "map");
-        sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5119] = (Material *)String_Alloc(v0);
-        v1 = Info_ValueForKey(ui_arenaInfos[n], "longname");
-        sharedUiInfo.mapList[sharedUiInfo.mapCount].mapName = String_Alloc(v1);
-        sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5082] = 0;
-        v2 = va("loadscreen_%s", (const char *)sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5119]);
-        sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5118] = (Material *)String_Alloc(v2);
-        sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5082] = Material_RegisterHandle(
-            (char *)sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5118],
-            IMAGE_TRACK_UI);
-        pszGameTypes = Info_ValueForKey(ui_arenaInfos[n], "gametype");
-        if (!pszGameTypes)
-            goto LABEL_15;
-        if (*pszGameTypes)
+        mapInfo &map = sharedUiInfo.mapList[sharedUiInfo.mapCount];
+        map = {};
+        map.mapLoadName = String_Alloc(Info_ValueForKey(ui_arenaInfos[n], "map"));
+        const char *display = Info_ValueForKey(ui_arenaInfos[n], "longname");
+        const std::string friendly = UI_FriendlyMapName(map.mapLoadName);
+        map.mapName = String_Alloc(*display && I_stricmp(display, map.mapLoadName) ? display : friendly.c_str());
+        map.imageName = String_Alloc(va("loadscreen_%s", map.mapLoadName));
+        char path[512];
+        if (!FS_UserMapZonePath(map.mapLoadName, path, sizeof(path)))
+            map.levelShot = Material_RegisterHandle(map.imageName, IMAGE_TRACK_UI);
+        const char *modes = Info_ValueForKey(ui_arenaInfos[n], "gametype");
+        map.typeBits = *modes ? 0 : -1;
+        if (*modes)
         {
-            sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5115] = 0;
-            v3 = va(".arena files : %s", (const char *)sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5119]);
-            Com_BeginParseSession(v3);
-            pszText = pszGameTypes;
-            while (1)
+            Com_BeginParseSession("map arena gametypes");
+            const char *cursor = modes;
+            for (;;)
             {
-                pszToken = (const char *)Com_Parse(&pszText);
-                if (!pszToken || !*pszToken)
-                    break;
-                for (i = 0; i < sharedUiInfo.numGameTypes; ++i)
-                {
-                    if (!I_stricmp(pszToken, sharedUiInfo.gameTypes[i].gameType))
-                        sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5115] = (Material *)((int)sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5115]
-                            | (1 << i));
-                }
+                const char *mode = (const char *)Com_Parse(&cursor);
+                if (!mode || !*mode) break;
+                for (int i = 0; i < sharedUiInfo.numGameTypes && i < 32; ++i)
+                    if (!I_stricmp(mode, sharedUiInfo.gameTypes[i].gameType)) map.typeBits |= (1u << i);
             }
             Com_EndParseSession();
         }
-        else
-        {
-        LABEL_15:
-            sharedUiInfo.serverHardwareIconList[40 * sharedUiInfo.mapCount - 5115] = (Material *)-1;
-        }
-        if (++sharedUiInfo.mapCount >= 128)
-            break;
+        ++sharedUiInfo.mapCount;
     }
 }
 
@@ -182,10 +322,13 @@ const char *UI_LoadArenasFromFile_LoadObj()
 
 void UI_LoadArenasFromFile()
 {
+    ui_numArenas = 0;
     if (IsFastFileLoad())
         UI_LoadArenasFromFile_FastFile();
     else
         UI_LoadArenasFromFile_LoadObj();
+    UI_LoadInstalledMapArenas();
+    if (IsFastFileLoad()) UI_LoadLooseArenaMetadata();
 }
 
 void UI_LoadArenasFromFile_FastFile()

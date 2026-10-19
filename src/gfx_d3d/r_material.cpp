@@ -574,8 +574,149 @@ Material *__cdecl Material_Register_LoadObj(char *name, int imageTrack)
     return material;
 }
 
+#ifdef KISAK_MP
+// Front-end artwork is deliberately separate from the stock fastfiles.
+// Own their GPU resources across UI reloads, and release them on renderer shutdown.
+struct MenuArtwork
+{
+    const char *name;
+    GfxImage image;
+    Material material;
+    MaterialTextureDef texture;
+};
+
+static MenuArtwork s_menuArtwork[] =
+{
+    { "codunlimited_frontend" },
+    { "codunlimited_logo" },
+    { "codunlimited_icon_multiplayer" },
+    { "codunlimited_icon_local" },
+    { "codunlimited_icon_mods" },
+    { "codunlimited_icon_settings" },
+    { "codunlimited_icon_extras" },
+    { "codunlimited_icon_quit" },
+    { "codunlimited_scroll_track" },
+    { "codunlimited_scroll_thumb" },
+    { "codunlimited_scroll_up" },
+    { "codunlimited_scroll_down" },
+    { "codunlimited_slider_track" },
+    { "codunlimited_slider_thumb" },
+    { "codunlimited_icon_video" },
+    { "codunlimited_icon_audio" },
+    { "codunlimited_icon_controls" },
+    { "codunlimited_icon_network" },
+
+
+};
+
+static MenuArtwork s_mapArtwork[128];
+static char s_mapArtworkNames[128][96];
+static unsigned int s_mapArtworkCount;
+
+static Material *Material_LoadMenuArtwork(MenuArtwork &art)
+{
+    if (art.image.texture.basemap) return &art.material;
+    Material *base = Material_Register_FastFile("white");
+    if (!base || base->textureCount != 1) return rgp.defaultMaterial;
+    art.image = {};
+    art.image.name = art.name;
+    art.image.category = IMG_CATEGORY_LOAD_FROM_FILE;
+    art.image.semantic = TS_COLOR_MAP;
+    art.image.track = IMAGE_TRACK_MISC;
+    if (!Image_LoadFromFileWithReader(&art.image, (int (__cdecl *)(const char *, int *))FS_FOpenFileRead)) return base;
+    art.material = *base;
+    art.material.info.name = art.name;
+    art.texture = base->textureTable[0];
+    art.texture.u.image = &art.image;
+    art.material.textureTable = &art.texture;
+    return &art.material;
+}
+
+static Material *Material_RegisterMenuArtwork(const char *name)
+{
+    for (auto &art : s_menuArtwork)
+    {
+        if (strcmp(name, art.name))
+            continue;
+        if (art.image.texture.basemap)
+            return &art.material;
+
+        Material *base = Material_Register_FastFile("white");
+        if (!base || base->textureCount != 1)
+            return rgp.defaultMaterial;
+
+        art.image = {};
+        art.image.name = art.name;
+        art.image.category = IMG_CATEGORY_LOAD_FROM_FILE;
+        art.image.semantic = TS_COLOR_MAP;
+        art.image.track = IMAGE_TRACK_MISC;
+        if (!Image_LoadFromFileWithReader(&art.image, (int (__cdecl *)(const char *, int *))FS_FOpenFileRead))
+        {
+            Com_PrintWarning(CON_CHANNEL_GFX, "Menu artwork unavailable: %s\n", name);
+            return base;
+        }
+
+        art.material = *base;
+        art.material.info.name = art.name;
+        art.texture = base->textureTable[0];
+        art.texture.u.image = &art.image;
+        art.material.textureTable = &art.texture;
+        Com_Printf(CON_CHANNEL_GFX, "Loaded menu artwork: %s (%i x %i)\n", name, art.image.width, art.image.height);
+        return &art.material;
+    }
+    return nullptr;
+}
+#endif
+
+Material *Material_RegisterUserMapPreview(const char *mapName)
+{
+#ifdef KISAK_MP
+    char name[96];
+    Com_sprintf(name, sizeof(name), "loadscreen_%s", mapName);
+    for (unsigned int i = 0; i < s_mapArtworkCount; ++i)
+        if (!strcmp(s_mapArtwork[i].name, name)) return Material_LoadMenuArtwork(s_mapArtwork[i]);
+    if (s_mapArtworkCount < 128 && FS_FileExists(va("images/%s.iwi", name)))
+    {
+        unsigned int index = s_mapArtworkCount++;
+        I_strncpyz(s_mapArtworkNames[index], name, sizeof(s_mapArtworkNames[index]));
+        s_mapArtwork[index].name = s_mapArtworkNames[index];
+        return Material_LoadMenuArtwork(s_mapArtwork[index]);
+    }
+    return Material_RegisterMenuArtwork("codunlimited_frontend");
+#else
+    return nullptr;
+#endif
+}
+
+void R_ReleaseMenuArtwork()
+{
+#ifdef KISAK_MP
+    for (auto &art : s_mapArtwork)
+    {
+        if (art.image.texture.basemap) Image_Release(&art.image);
+        art = {};
+    }
+    s_mapArtworkCount = 0;
+    for (auto &art : s_menuArtwork)
+    {
+        if (art.image.texture.basemap)
+            Image_Release(&art.image);
+        art.image = {};
+        art.material = {};
+        art.texture = {};
+    }
+#endif
+}
+
 Material *__cdecl Material_Register(const char *name, int imageTrack)
 {
+#ifdef KISAK_MP
+    if (IsFastFileLoad())
+    {
+        if (Material *artwork = Material_RegisterMenuArtwork(name))
+            return artwork;
+    }
+#endif
     if (IsFastFileLoad())
         return Material_Register_FastFile(name);
     else

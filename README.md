@@ -1,4 +1,4 @@
-# COD:Unlimited built from KisakCOD
+# COD:Reborn built from KisakCOD
 
 ## About the project
 An open source fully-buildable reimplementation of Call of Duty 4

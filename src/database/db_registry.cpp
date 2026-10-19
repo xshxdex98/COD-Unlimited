@@ -2789,6 +2789,12 @@ void __cdecl DB_BuildOSPath(const char *zoneName, uint32_t size, char *filename)
     Language = Win_GetLanguage();
     v3 = Sys_DefaultInstallPath();
     Com_sprintf(filename, size, "%s\\zone\\%s\\%s.ff", v3, Language, zoneName);
+    if (GetFileAttributesA(filename) == INVALID_FILE_ATTRIBUTES)
+    {
+        char userMapPath[512];
+        if (FS_UserMapZonePath(zoneName, userMapPath, sizeof(userMapPath)))
+            I_strncpyz(filename, userMapPath, size);
+    }
 }
 
 int32_t __cdecl DB_GetZoneAllocType(int32_t zoneFlags)

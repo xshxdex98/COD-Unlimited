@@ -1722,6 +1722,50 @@ void __cdecl FS_AddLocalizedGameDirectory(char *path, char *dir)
     FS_AddGameDirectory(path, dir, 0, 0);
 }
 
+static char fs_userMap[64];
+
+bool FS_UserMapZonePath(const char *zoneName, char *path, unsigned int size)
+{
+    if (!zoneName || !*zoneName || strlen(zoneName) >= 64) return false;
+    char map[64];
+    I_strncpyz(map, zoneName, sizeof(map));
+    for (const char *p = map; *p; ++p)
+        if (!isalnum((unsigned char)*p) && *p != '_' && *p != '-') return false;
+    size_t length = strlen(map);
+    if (length > 5 && !strcmp(map + length - 5, "_load")) map[length - 5] = 0;
+    const char *roots[] = { fs_homepath->current.string, fs_basepath->current.string };
+    for (const char *root : roots)
+    {
+        Com_sprintf(path, size, "%s/usermaps/%s/%s.ff", root, map, zoneName);
+        DWORD attributes = GetFileAttributesA(path);
+        if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return true;
+    }
+    return false;
+}
+
+void FS_SetUserMap(const char *mapName)
+{
+    char path[512];
+    const bool installed = FS_UserMapZonePath(mapName, path, sizeof(path));
+    I_strncpyz(fs_userMap, installed ? mapName : "", sizeof(fs_userMap));
+    char directory[80];
+    Com_sprintf(directory, sizeof(directory), "usermaps/%s", fs_userMap);
+    // Keep previous archives alive until the next filesystem restart, but never
+    // resolve assets from a different custom map after a map rotation.
+    for (searchpath_s *search = fs_searchpaths; search; search = search->next)
+    {
+        const char *game = search->iwd ? search->iwd->iwdGamename : search->dir ? search->dir->gamedir : "";
+        if (!I_strnicmp(game, "usermaps/", 9)) search->ignore = !installed || I_stricmp(game, directory) != 0;
+    }
+    if (!installed) return;
+    char savedDirectory[256];
+    I_strncpyz(savedDirectory, fs_gamedir, sizeof(savedDirectory));
+    FS_AddGameDirectory((char *)fs_basepath->current.string, directory, 0, 0);
+    if (I_stricmp(fs_homepath->current.string, fs_basepath->current.string))
+        FS_AddGameDirectory((char *)fs_homepath->current.string, directory, 0, 0);
+    I_strncpyz(fs_gamedir, savedDirectory, sizeof(fs_gamedir));
+}
+
 void __cdecl Com_ReadCDKey()
 {
     // KISAKTODO: this sucks!
@@ -2015,6 +2059,9 @@ void __cdecl FS_Startup(char *gameName)
         if (*(_BYTE *)fs_homepath->current.integer && I_stricmp(fs_homepath->current.string, fs_basepath->current.string))
             FS_AddLocalizedGameDirectory((char *)fs_homepath->current.integer, (char *)fs_gameDirVar->current.integer);
     }
+    char userMap[64];
+    I_strncpyz(userMap, fs_userMap, sizeof(userMap));
+    if (userMap[0]) FS_SetUserMap(userMap);
     Com_ReadCDKey();
     FS_AddCommands();
     FS_Path_f();

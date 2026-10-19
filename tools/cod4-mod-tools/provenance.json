@@ -1,0 +1,50 @@
+[
+  {
+    "file": "bin/cod4map.exe",
+    "size": 1257472,
+    "sha256": "cee66388a6f43a97bbd7dbda2ea39f50a9c0ba2def396ed4927f6546829f1cb4",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/cod4map.exe"
+  },
+  {
+    "file": "bin/cod4rad.exe",
+    "size": 733184,
+    "sha256": "9180c33b6390bdf0f0f7f8abbeebf2c1f98cae54c7ad091060ef813e88e3b5f7",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/cod4rad.exe"
+  },
+  {
+    "file": "bin/cod4rad64.exe",
+    "size": 1024512,
+    "sha256": "a63b2c975aa32a1b8beb9f89a0362492a38d6879a52383adda4cc7f6b54e9ac9",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/cod4rad64.exe"
+  },
+  {
+    "file": "bin/converter.exe",
+    "size": 741376,
+    "sha256": "95e5c09c6f85018dfbed415995d4203f6684d9d5fa8c85a6bd8becdd5b4521e3",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/converter.exe"
+  },
+  {
+    "file": "bin/linker_pc.exe",
+    "size": 1163264,
+    "sha256": "7a3bd700eb4e21f5dafd94b25f54600e6963c15d4cec2ddef76d3661ae524c31",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/linker_pc.exe"
+  },
+  {
+    "file": "bin/mfc71.dll",
+    "size": 1060864,
+    "sha256": "4da5efdc46d126b45daeee8bc69c0ba2aa243589046b7dfd12a7e21b9bee6a32",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/mfc71.dll"
+  },
+  {
+    "file": "bin/MSVCP71.DLL",
+    "size": 499712,
+    "sha256": "df96156f6a548fd6fe5672918de5ae4509d3c810a57bffd2a91de45a3ed5b23b",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/MSVCP71.DLL"
+  },
+  {
+    "file": "bin/msvcr71.dll",
+    "size": 348160,
+    "sha256": "8094af5ee310714caebccaeee7769ffb08048503ba478b879edfef5f1a24fefe",
+    "source": "https://raw.githubusercontent.com/promod/CoD4-Mod-Tools/master/bin/msvcr71.dll"
+  }
+]

@@ -1703,6 +1703,7 @@ void __cdecl CL_DisconnectPacket(int32_t localClientNum, netadr_t from, char *re
 
 void __cdecl CL_InitLoad(const char *mapname, const char *gametype)
 {
+    FS_SetUserMap(mapname);
     if (CL_AnyLocalClientsRunning())
     {
         com_expectedHunkUsage = 0;

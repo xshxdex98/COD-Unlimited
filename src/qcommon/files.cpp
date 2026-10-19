@@ -211,6 +211,10 @@ int __cdecl FS_CompareFFs(char *neededFFs, int len, int dlstring)
         fileSize = v4;
         if (v4 != fs_serverReferencedFFCheckSums[i] && fs_serverReferencedFFNames[i] && *fs_serverReferencedFFNames[i])
         {
+            Com_PrintError(CON_CHANNEL_FILES,
+                "Fastfile mismatch: %s.ff (local %i bytes, server %i bytes; mod directory '%s')\n",
+                fs_serverReferencedFFNames[i], fileSize, fs_serverReferencedFFCheckSums[i],
+                fs_gameDirVar->current.string);
             if ((const char *)v7 == v5
                 || I_strnicmp(fs_serverReferencedFFNames[i], fs_gameDirVar->current.string, v7 - (_DWORD)v5))
             {

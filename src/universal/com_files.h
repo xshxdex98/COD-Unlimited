@@ -1,5 +1,8 @@
 #pragma once
 
+bool FS_UserMapZonePath(const char *zoneName, char *path, unsigned int size);
+void FS_SetUserMap(const char *mapName);
+
 #include "q_shared.h"
 
 enum FsThread : __int32

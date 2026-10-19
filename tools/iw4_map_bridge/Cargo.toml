@@ -1,0 +1,11 @@
+[package]
+name = "codunlimited-iw4-map-bridge"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fastfile_iw4 = { path = "C:/Users/xshxd/OneDrive/Desktop/Dev Workspace/iw4L/crates/fastfile_iw4" }
+asset_transport = { path = "C:/Users/xshxd/OneDrive/Desktop/Dev Workspace/iw4L/crates/asset_transport" }
+
+[workspace]

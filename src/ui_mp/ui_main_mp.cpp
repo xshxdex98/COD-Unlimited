@@ -25,6 +25,8 @@
 #include <win32/win_input.h>
 #include <universal/timing.h>
 #include <universal/profile.h>
+#include <string>
+#include <gfx_d3d/r_material.h>
 
 enum sscType_t : __int32
 {                                       // ...
@@ -221,12 +223,16 @@ const dvar_t *ui_netGameType;
 LegacyHacks legacyHacks;
 
 static char g_mapname[64];
+static menuDef_t *s_customMainMenu;
 static char g_gametype[64];
 static int ui_serverFilterType;
 static bool g_ingameMenusLoaded[1];
 
 uiInfo_s uiInfoArray; // On PC this array is just [1].
 sharedUiInfo_t sharedUiInfo;
+
+Material *__cdecl UI_GetLevelShot(int index);
+#include "ui_frontend_theme.h"
 
 const char *MonthAbbrev[12] =
 {
@@ -755,6 +761,9 @@ void __cdecl UI_UpdateTime(int localClientNum, int realtime)
 
 void __cdecl UI_DrawBuildNumber(int localClientNum)
 {
+    // The custom front page carries its own product version in the footer.
+    if (s_cuFrontendThemed || (s_customMainMenu && Menu_IsVisible(&uiInfoArray.uiDC, s_customMainMenu)))
+        return;
     int BuildNumberAsInt; // eax
     char *v2; // eax
     Font_s *scale; // [esp+0h] [ebp-20h]
@@ -2572,6 +2581,7 @@ const char *UI_LoadMods()
         if (++sharedUiInfo.modCount >= 64)
             break;
     }
+    Dvar_SetStringByName("ui_selectedMod", sharedUiInfo.modCount ? sharedUiInfo.modList[0].modName : "No mods installed");
     return result;
 }
 
@@ -2780,6 +2790,16 @@ void __cdecl UI_RunMenuScript(int localClientNum, const char **args, const char 
                 "(localClientNum == 0)",
                 localClientNum);
         dc = (UiContext *)&uiInfoArray;
+        if (!I_stricmp(out,"FrontendHostMapTest"))
+        {
+            CU_HostMapSmoke(dc);
+            return;
+        }
+        if (!I_stricmp(out,"FrontendSmokeTest"))
+        {
+            CU_FrontendSmoke(dc);
+            return;
+        }
         if (I_stricmp(out, "StartServer"))
         {
             if (I_stricmp(out, "getCDKey"))
@@ -4224,6 +4244,13 @@ Material *__cdecl UI_GetLevelShot(int index)
 {
     if (index < 0 || index >= sharedUiInfo.mapCount)
         index = 0;
+    char path[512];
+    const char *mapName = sharedUiInfo.mapList[index].mapLoadName;
+    if (FS_UserMapZonePath(mapName, path, sizeof(path)))
+    {
+        FS_SetUserMap(mapName);
+        return Material_RegisterUserMapPreview(mapName);
+    }
     if (!sharedUiInfo.serverHardwareIconList[40 * index - 5082])
         sharedUiInfo.serverHardwareIconList[40 * index - 5082] = Material_RegisterHandle(
             (char *)sharedUiInfo.serverHardwareIconList[40 * index - 5118],
@@ -4399,6 +4426,8 @@ void __cdecl UI_FeederSelection(int localClientNum, float feederID, int index)
         if (feederID == 9.0)
         {
             sharedUiInfo.modIndex = index;
+            if (index < sharedUiInfo.modCount)
+                Dvar_SetStringByName("ui_selectedMod", sharedUiInfo.modList[index].modName);
         }
         else if (feederID == 20.0)
         {
@@ -4694,6 +4723,37 @@ void __cdecl UI_Init(int localClientNum)
     {
         UI_MapLoadInfo(va("maps/mp/%s.csv", g_mapname));
     }
+    // Keep the fastfile menus (options, server browser, etc.), but allow the
+    // base game's front page to be edited without rebuilding ui_mp.ff.
+    // Mods retain their own main menu.
+    s_customMainMenu = nullptr;
+    if (IsFastFileLoad() && !g_mapname[0] && !Dvar_GetString("fs_game")[0]
+        && FS_FileExists((char *)"ui_mp/scriptmenus/main.menu"))
+    {
+        MenuList *overrides = UI_LoadMenu_LoadObj((char *)"ui_mp/scriptmenus/main.menu", 3);
+        if (overrides->menuCount == 1 && overrides->menus[0]->window.name
+            && !I_stricmp(overrides->menus[0]->window.name, "main"))
+        {
+            for (int i = 0; i < uiInfoArray.uiDC.menuCount; ++i)
+            {
+                if (!I_stricmp(uiInfoArray.uiDC.Menus[i]->window.name, "main"))
+                {
+                    // This is a UI-owned menu, not a DB asset. Replace the
+                    // context entry directly; UI_AddMenu validates DB identity.
+                    uiInfoArray.uiDC.Menus[i] = overrides->menus[0];
+                    s_customMainMenu = overrides->menus[0];
+                    Com_Printf(CON_CHANNEL_UI, "Custom main menu loaded: ui_mp/scriptmenus/main.menu\n");
+                    break;
+                }
+            }
+        }
+        else
+        {
+            Com_PrintWarning(CON_CHANNEL_UI, "Custom main menu invalid; keeping fastfile main menu.\n");
+        }
+    }
+    UI_DumpFrontendInventory(&uiInfoArray.uiDC);
+    UI_ThemeFrontend(&uiInfoArray.uiDC);
     UI_AssetCache();
     Menus_CloseAll(&uiInfoArray.uiDC);
     sharedUiInfo.serverHardwareIconList[0] = Material_RegisterHandle("server_hardware_unknown", IMAGE_TRACK_UI);
@@ -4907,6 +4967,15 @@ void UI_AssetCache()
     sharedUiInfo.assets.scrollBarThumb = Material_RegisterHandle("ui_scrollbar_thumb", IMAGE_TRACK_UI);
     sharedUiInfo.assets.sliderBar = Material_RegisterHandle("ui_slider2", IMAGE_TRACK_UI);
     sharedUiInfo.assets.sliderThumb = Material_RegisterHandle("ui_sliderbutt_1", IMAGE_TRACK_UI);
+    if (s_cuFrontendThemed)
+    {
+        sharedUiInfo.assets.scrollBar = Material_RegisterHandle("codunlimited_scroll_track", IMAGE_TRACK_UI);
+        sharedUiInfo.assets.scrollBarThumb = Material_RegisterHandle("codunlimited_scroll_thumb", IMAGE_TRACK_UI);
+        sharedUiInfo.assets.scrollBarArrowUp = Material_RegisterHandle("codunlimited_scroll_up", IMAGE_TRACK_UI);
+        sharedUiInfo.assets.scrollBarArrowDown = Material_RegisterHandle("codunlimited_scroll_down", IMAGE_TRACK_UI);
+        sharedUiInfo.assets.sliderBar = Material_RegisterHandle("codunlimited_slider_track", IMAGE_TRACK_UI);
+        sharedUiInfo.assets.sliderThumb = Material_RegisterHandle("codunlimited_slider_thumb", IMAGE_TRACK_UI);
+    }
     sharedUiInfo.assets.cursor = Material_RegisterHandle("ui_cursor", IMAGE_TRACK_MISC);
     sharedUiInfo.assets.bigFont = CL_RegisterFont("fonts/bigfont", IMAGE_TRACK_MISC);
     sharedUiInfo.assets.smallFont = CL_RegisterFont("fonts/smallfont", IMAGE_TRACK_MISC);

@@ -1,5 +1,9 @@
 #pragma once
 
+struct Material;
+Material *Material_RegisterUserMapPreview(const char *mapName);
+void R_ReleaseMenuArtwork();
+
 #include <d3d9.h>
 
 #include "r_gfx.h"
