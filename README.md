@@ -26,16 +26,21 @@ Aimed towards mod developers and COD4 enthusiasts.
 8) Run the game via Visual Studio play button or just the .exe
 
 ## Building COD Unlimited's content
-Our own scripts, tables and assets live in `mod/` and are built into `zone/english/unlimited_mp.ff`.
-The game loads it right after the stock `common_mp.ff`, so anything in it with a stock name replaces
-the stock asset; a mod's `mod.ff` still loads on top.
+Our own scripts, tables and assets live in `mod/` and are built into `zone/english/unlimited_mp.ff`,
+with their images in `main/z_unlimited.iwd`. The game loads the fastfile right after the stock
+`common_mp.ff`, so anything in it with a stock name replaces the stock asset; a mod's `mod.ff` still
+loads on top.
 
-1) Put the CoD4 mod tools' `bin` folder in `tools/cod4-mod-tools/bin` (see `provenance.json`).
+1) Fetch the CoD4 mod tools (kept out of this repository): `py tools/get_mod_tools.py`
 2) Extract the stock files the linker needs, once, from your own copy of the game:
    `py tools/extract_rawfiles.py build/stock_raw bin/Debug/zone/english/code_post_gfx_mp.ff bin/Debug/zone/english/common_mp.ff`
 3) Build and install: `py tools/build_unlimited.py` (or pass another game folder).
 
-List new assets in `mod/unlimited_mp.csv` and put their files under `mod/raw/`.
+List new assets in `mod/unlimited_mp.csv` and put their files under `mod/raw/`. Materials are
+defined in `mod/source_data/*.gdt` with their images under `mod/texture_assets/`.
+
+The game can write out every string table it has loaded: `dumpraw 32` in the console saves them
+under `raw/` in the game folder.
 
 
 ```

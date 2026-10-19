@@ -7,7 +7,8 @@ A fastfile is "IWffu100", a version (5) and a zlib stream of the zone. Assets wr
     -1 (name), length, -1 (buffer), name\0, buffer[length]\0
 and a string table is
     -1 (name), columns, rows, -1 (values), name\0, columns*rows times -1, then each string\0.
-Only tables written that way are found; most of the stock ones (rankTable.csv among them) are not yet.
+Only tables written that way are found. Most stock tables (rankTable.csv among them) share strings
+with other assets through offsets into the loaded zone; for those, run `dumpraw 32` in the game.
 The output is the game's own content: keep it out of the public repo (build/ is ignored).
 """
 import re
