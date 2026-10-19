@@ -1,8 +1,12 @@
-"""Rank insignia for player levels 1-99.
+"""Rank insignia for player levels 1-99 and the prestige emblems 1-10.
 
 Every shape is drawn as geometry at 8x size and scaled down, so the icons stay sharp and can be
 regenerated after any change here. Levels 1-55 follow CoD4's grades (three levels each, then
 Commander); 56-99 are COD Unlimited's own eleven tiers of four levels.
+
+A prestige is a hollow seal instead of the tiers' hexagon. The device inside grows every three
+prestiges (a star, then a laurel around it, then a crown above it) and the metals step up with
+it; the pips say which of the three it is. Prestige 10 is the platinum and gold seal on its own.
 """
 import math
 
@@ -307,15 +311,67 @@ def icons():
             yield f"cu_rank_{name}{level}", tier_icon(glyph, frame_colors, glyph_colors, level)
 
 
+SEAL_CENTER = (0.5, 0.46)
+# (seal metal, device metal) for prestiges 1-3, 4-6, 7-9 and 10.
+PRESTIGE_BANDS = [(STEEL, LIME), (LIME, STEEL), (GOLD, STEEL), (PLATINUM, GOLD)]
+
+
+def seal_mask(teeth):
+    """A toothed ring, hollow like the tier hexagons."""
+    mask = Image.new("L", (S, S))
+    draw = ImageDraw.Draw(mask)
+    cx, cy = SEAL_CENTER
+    points = []
+    for i in range(teeth * 2):
+        radius = 0.41 if i % 2 == 0 else 0.37
+        angle = math.pi * 2 * i / (teeth * 2) - math.pi / 2
+        points.append(px(cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+    draw.polygon(points, fill=255)
+    draw.ellipse([px(cx - 0.31, cy - 0.31), px(cx + 0.31, cy + 0.31)], fill=0)
+    return mask
+
+
+def seal_device_mask(band):
+    mask = Image.new("L", (S, S))
+    draw = ImageDraw.Draw(mask)
+    cx, cy = SEAL_CENTER
+    crowned = band >= 2
+    star_y = cy + (0.05 if crowned else 0.01)
+    draw.polygon(star_points(cx, star_y, 0.13 if crowned else 0.17), fill=255)
+    if band >= 1:
+        wreath(draw, cx, star_y, 0.2, 5, 0.1, 0.045)
+    if crowned:
+        draw.polygon([px(0.41, 0.31), px(0.41, 0.22), px(0.455, 0.265), px(0.5, 0.2), px(0.545, 0.265),
+                      px(0.59, 0.22), px(0.59, 0.31)], fill=255)
+    return mask
+
+
+def prestige_icons():
+    """Yields (material name, image) for prestiges 1-10."""
+    for prestige in range(1, 11):
+        band = min(3, (prestige - 1) // 3)
+        seal, device = PRESTIGE_BANDS[band]
+        layers = [(seal_mask(24 if band == 3 else 16), seal), (seal_device_mask(band), device)]
+        if band < 3:
+            layers += pip_masks((prestige - 1) % 3 + 1, 3)
+        yield f"cu_prestige_{prestige}", compose(layers)
+
+
+def contact_sheet(images, columns):
+    sheet = Image.new("RGBA", (SIZE * columns, SIZE * math.ceil(len(images) / columns)), (24, 30, 27, 255))
+    for i, image in enumerate(images):
+        sheet.alpha_composite(image, ((i % columns) * SIZE, (i // columns) * SIZE))
+    return sheet
+
+
 if __name__ == "__main__":
     import sys
     from pathlib import Path
 
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "build/art/preview")
     out.mkdir(parents=True, exist_ok=True)
-    made = list(icons())
-    sheet = Image.new("RGBA", (SIZE * 11, SIZE * math.ceil(len(made) / 11)), (24, 30, 27, 255))
-    for i, (name, image) in enumerate(made):
-        sheet.alpha_composite(image, ((i % 11) * SIZE, (i // 11) * SIZE))
-    sheet.save(out / "rank_icons.png")
-    print(len(made), "icons")
+    ranks = [image for _, image in icons()]
+    prestiges = [image for _, image in prestige_icons()]
+    contact_sheet(ranks, 11).save(out / "rank_icons.png")
+    contact_sheet(prestiges, 5).save(out / "prestige_icons.png")
+    print(len(ranks), "rank icons,", len(prestiges), "prestige emblems")

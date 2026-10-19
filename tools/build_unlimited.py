@@ -59,7 +59,7 @@ def write_generated_art():
     folder = "texture_assets/unlimited/ranks"
     (WORK / folder).mkdir(parents=True)
     names, entries = [], []
-    for name, image in rank_icons.icons():
+    for name, image in [*rank_icons.icons(), *rank_icons.prestige_icons()]:
         image.save(WORK / folder / f"{name}.tga")
         names.append(name)
         entries.append(material_entry(name, f"{folder}/{name}.tga"))
