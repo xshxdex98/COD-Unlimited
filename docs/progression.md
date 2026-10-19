@@ -6,8 +6,9 @@ This is the plan the code is built against; change it here first when the design
 ## Player level and prestige
 
 - **Levels 1-99.** Levels 1-55 keep CoD4's XP curve (120,280 XP to reach 55), so the early game
-  feels familiar. From 56 to 99 each level costs a little more than the one before it. The exact
-  numbers live in one table and are tuned from real match data, not fixed here.
+  feels familiar. From 56 to 99 each level costs 120 XP more than the one before it, continuing
+  CoD4's last step (473,530 XP to max). `tools/ranks.py` builds the table, so tuning from real
+  match data is a one-line change there.
 - **Prestige 1-10.** At level 99 with the bar full, the player can prestige: back to level 1,
   with a new prestige icon, a prestige camo and an unlock token. Weapon levels, camos, gloves
   and challenges are kept. Only the level resets, as in modern CoD.

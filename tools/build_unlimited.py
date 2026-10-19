@@ -8,7 +8,8 @@ folder is put together under build/linker each time, so nothing stale gets linke
 
 Materials go into the fastfile; the game loads their images from images/*.iwi through the file
 system, so those ship in the .iwd. Generated art (tools/art) is rendered into the workspace and
-listed alongside mod/'s own assets, and so are the maps in mod/maps.csv (names and mapsTable rows).
+listed alongside mod/'s own assets, and so are the maps in mod/maps.csv (names and mapsTable rows)
+and the player levels (tools/ranks.py).
 """
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ import zipfile
 from pathlib import Path
 
 import install_maps
+import ranks
 from art import rank_icons
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,7 +77,7 @@ def write_maps():
     for row in maps:
         lines += [f"REFERENCE           {row['key'].removeprefix('MPUI_')}", f'LANG_ENGLISH        "{row["name"]}"', ""]
     folder = WORK / "raw" / "english" / "localizedstrings"
-    folder.mkdir(parents=True)
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "mpui.str").write_text("\n".join(lines + ["ENDMARKER"]) + "\n")
 
     # Columns: map, allies and axis soldier types, name, loading screen, index, description (unused), compass overlay.
@@ -126,7 +128,7 @@ def main():
     for name in ["source_data", "texture_assets"]:
         if (MOD / name).exists():
             shutil.copytree(MOD / name, WORK / name)
-    generated = write_generated_art() + write_maps()
+    generated = write_generated_art() + write_maps() + ranks.write(STOCK, WORK / "raw")
     (WORK / "zone_source" / "english" / "assetlist").mkdir(parents=True)     # the linker writes its asset list here
     assets = (MOD / f"{ZONE}.csv").read_text().splitlines() + generated
     (WORK / "zone_source" / f"{ZONE}.csv").write_text("\n".join(assets) + "\n")
