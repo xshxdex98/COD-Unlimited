@@ -8,7 +8,7 @@ folder is put together under build/linker each time, so nothing stale gets linke
 
 Materials go into the fastfile; the game loads their images from images/*.iwi through the file
 system, so those ship in the .iwd. Generated art (tools/art) is rendered into the workspace and
-listed alongside mod/'s own assets.
+listed alongside mod/'s own assets, and so are the display names of the maps in mod/maps.csv.
 """
 import shutil
 import subprocess
@@ -16,6 +16,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import install_maps
 from art import rank_icons
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,18 @@ def write_generated_art():
     return [f"material,{name}" for name in names]
 
 
+def write_map_names():
+    """The display names of the maps we ship, as MPUI_ strings like the stock maps'; returns the zone entry."""
+    lines = ['VERSION             "1"', 'CONFIG              "C:\\trees\\cod3\\cod3\\bin\\StringEd.cfg"',
+             'FILENOTES           ""', ""]
+    for _, display, key in install_maps.read_maps():
+        lines += [f"REFERENCE           {key.removeprefix('MPUI_')}", f'LANG_ENGLISH        "{display}"', ""]
+    folder = WORK / "raw" / "english" / "localizedstrings"
+    folder.mkdir(parents=True)
+    (folder / "mpui.str").write_text("\n".join(lines + ["ENDMARKER"]) + "\n")
+    return ["localize,mpui"]
+
+
 def run_tool(exe, *args):
     # No console: after an error the tools wait for a key press on it.
     result = subprocess.run([str(WORK / "bin" / exe), *args], cwd=WORK / "bin", stdin=subprocess.DEVNULL,
@@ -101,7 +114,7 @@ def main():
     for name in ["source_data", "texture_assets"]:
         if (MOD / name).exists():
             shutil.copytree(MOD / name, WORK / name)
-    generated = write_generated_art()
+    generated = write_generated_art() + write_map_names()
     (WORK / "zone_source" / "english" / "assetlist").mkdir(parents=True)     # the linker writes its asset list here
     assets = (MOD / f"{ZONE}.csv").read_text().splitlines() + generated
     (WORK / "zone_source" / f"{ZONE}.csv").write_text("\n".join(assets) + "\n")

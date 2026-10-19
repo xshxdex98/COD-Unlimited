@@ -1,7 +1,12 @@
 #pragma once
 
-bool FS_UserMapZonePath(const char *zoneName, char *path, unsigned int size);
-void FS_SetUserMap(const char *mapName);
+// Maps that keep their zones and iwds in a folder of their own, under the base or home path:
+// the maps COD Unlimited ships, then the ones players install. Their iwds often replace stock
+// images, so each folder is only searched while its map is loaded.
+inline constexpr const char *FS_MAP_FOLDERS[] = { "zone/maps", "usermaps" };
+
+bool FS_MapZonePath(const char *zoneName, char *path, unsigned int size);
+void FS_SetActiveMap(const char *mapName);
 
 #include "q_shared.h"
 

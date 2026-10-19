@@ -1158,7 +1158,7 @@ END_LOOP:
     if (net_lanauthorize->current.enabled || !Sys_IsLANAddress(clc->serverAddress))
         CL_RequestAuthorization(localClientNum);
 
-    FS_SetUserMap(Info_ValueForKey(CL_GetConfigString(localClientNum, 0), "mapname"));
+    FS_SetActiveMap(Info_ValueForKey(CL_GetConfigString(localClientNum, 0), "mapname"));
     CL_InitDownloads(localClientNum);
     Dvar_SetInt(cl_paused, 0);
 }

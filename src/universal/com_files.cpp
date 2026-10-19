@@ -92,7 +92,7 @@ char *__cdecl FS_ReferencedIwdPureChecksums()
     info6[strlen(info6)] = ' ';
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd && !search->bLocalized)
+        if (search->iwd && !search->ignore && !search->bLocalized)
         {
             if (search->iwd->referenced)
             {
@@ -151,7 +151,7 @@ char *__cdecl FS_ReferencedIwdNames()
     info8[0] = 0;
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd && (search->iwd->referenced || I_strnicmp(search->iwd->iwdGamename, "main", 4)))
+        if (search->iwd && !search->ignore && (search->iwd->referenced || I_strnicmp(search->iwd->iwdGamename, "main", 4)))
         {
             if (info8[0])
                 I_strncat(info8, 0x2000, " ");
@@ -172,7 +172,7 @@ char *__cdecl FS_ReferencedIwdChecksums()
     info5[0] = 0;
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd && (search->iwd->referenced || I_strnicmp(search->iwd->iwdGamename, "main", 4)))
+        if (search->iwd && !search->ignore && (search->iwd->referenced || I_strnicmp(search->iwd->iwdGamename, "main", 4)))
         {
             v0 = va("%i ", search->iwd->checksum);
             I_strncat(info5, 0x2000, v0);
@@ -189,7 +189,7 @@ char *__cdecl FS_LoadedIwdNames()
     info3[0] = 0;
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd && !search->bLocalized)
+        if (search->iwd && !search->ignore && !search->bLocalized)
         {
             if (info3[0])
                 I_strncat(info3, 0x2000, " ");
@@ -208,7 +208,7 @@ char *__cdecl FS_LoadedIwdChecksums()
     info2_0[0] = 0;
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd)
+        if (search->iwd && !search->ignore)
         {
             if (!search->bLocalized)
             {
@@ -240,7 +240,7 @@ char *__cdecl FS_LoadedIwdPureChecksums()
     info4[0] = 0;
     for (search = fs_searchpaths; search; search = search->next)
     {
-        if (search->iwd)
+        if (search->iwd && !search->ignore)
         {
             if (!search->bLocalized)
             {
@@ -712,6 +712,8 @@ char __cdecl FS_SanitizeFilename(const char *filename, char *sanitizedName, int 
 
 BOOL __cdecl FS_UseSearchPath(const searchpath_s *pSearch)
 {
+    if (pSearch->ignore) // another map's folder (FS_SetActiveMap)
+        return 0;
     if (pSearch->bLocalized && fs_ignoreLocalized->current.enabled)
         return 0;
     return !pSearch->bLocalized || pSearch->language == SEH_GetCurrentLanguage();
@@ -1722,9 +1724,20 @@ void __cdecl FS_AddLocalizedGameDirectory(char *path, char *dir)
     FS_AddGameDirectory(path, dir, 0, 0);
 }
 
-static char fs_userMap[64];
+static char fs_activeMap[64];
 
-bool FS_UserMapZonePath(const char *zoneName, char *path, unsigned int size)
+static bool FS_InMapFolder(const char *game)
+{
+    for (const char *folder : FS_MAP_FOLDERS)
+    {
+        const size_t length = strlen(folder);
+        if (!I_strnicmp(game, folder, length) && game[length] == '/') return true;
+    }
+    return false;
+}
+
+// Finds <root>/<folder>/<map>/<zoneName>.ff; directory receives "<folder>/<map>".
+static bool FS_FindMapZone(const char *zoneName, char *path, unsigned int size, char *directory, unsigned int directorySize)
 {
     if (!zoneName || !*zoneName || strlen(zoneName) >= 64) return false;
     char map[64];
@@ -1734,28 +1747,40 @@ bool FS_UserMapZonePath(const char *zoneName, char *path, unsigned int size)
     size_t length = strlen(map);
     if (length > 5 && !strcmp(map + length - 5, "_load")) map[length - 5] = 0;
     const char *roots[] = { fs_homepath->current.string, fs_basepath->current.string };
-    for (const char *root : roots)
+    for (const char *folder : FS_MAP_FOLDERS)
     {
-        Com_sprintf(path, size, "%s/usermaps/%s/%s.ff", root, map, zoneName);
-        DWORD attributes = GetFileAttributesA(path);
-        if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return true;
+        for (const char *root : roots)
+        {
+            Com_sprintf(path, size, "%s/%s/%s/%s.ff", root, folder, map, zoneName);
+            DWORD attributes = GetFileAttributesA(path);
+            if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY))
+            {
+                Com_sprintf(directory, directorySize, "%s/%s", folder, map);
+                return true;
+            }
+        }
     }
     return false;
 }
 
-void FS_SetUserMap(const char *mapName)
+bool FS_MapZonePath(const char *zoneName, char *path, unsigned int size)
+{
+    char directory[80];
+    return FS_FindMapZone(zoneName, path, size, directory, sizeof(directory));
+}
+
+void FS_SetActiveMap(const char *mapName)
 {
     char path[512];
-    const bool installed = FS_UserMapZonePath(mapName, path, sizeof(path));
-    I_strncpyz(fs_userMap, installed ? mapName : "", sizeof(fs_userMap));
-    char directory[80];
-    Com_sprintf(directory, sizeof(directory), "usermaps/%s", fs_userMap);
+    char directory[80] = "";
+    const bool installed = FS_FindMapZone(mapName, path, sizeof(path), directory, sizeof(directory));
+    I_strncpyz(fs_activeMap, installed ? mapName : "", sizeof(fs_activeMap));
     // Keep previous archives alive until the next filesystem restart, but never
-    // resolve assets from a different custom map after a map rotation.
+    // resolve assets from a different map folder after a map rotation.
     for (searchpath_s *search = fs_searchpaths; search; search = search->next)
     {
         const char *game = search->iwd ? search->iwd->iwdGamename : search->dir ? search->dir->gamedir : "";
-        if (!I_strnicmp(game, "usermaps/", 9)) search->ignore = !installed || I_stricmp(game, directory) != 0;
+        if (FS_InMapFolder(game)) search->ignore = !installed || I_stricmp(game, directory) != 0;
     }
     if (!installed) return;
     char savedDirectory[256];
@@ -2059,9 +2084,9 @@ void __cdecl FS_Startup(char *gameName)
         if (*(_BYTE *)fs_homepath->current.integer && I_stricmp(fs_homepath->current.string, fs_basepath->current.string))
             FS_AddLocalizedGameDirectory((char *)fs_homepath->current.integer, (char *)fs_gameDirVar->current.integer);
     }
-    char userMap[64];
-    I_strncpyz(userMap, fs_userMap, sizeof(userMap));
-    if (userMap[0]) FS_SetUserMap(userMap);
+    char activeMap[64];
+    I_strncpyz(activeMap, fs_activeMap, sizeof(activeMap));
+    if (activeMap[0]) FS_SetActiveMap(activeMap);
     Com_ReadCDKey();
     FS_AddCommands();
     FS_Path_f();

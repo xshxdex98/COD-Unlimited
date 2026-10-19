@@ -401,7 +401,7 @@ void __cdecl SV_SpawnServer(char *mapname)
 
     Com_SyncThreads();
     Sys_BeginLoadThreadPriorities();
-    FS_SetUserMap(mapname);
+    FS_SetActiveMap(mapname);
     mapIsPreloaded = 0;
     if (IsFastFileLoad() && !com_dedicated->current.integer)
     {

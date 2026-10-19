@@ -814,26 +814,26 @@ static void CU_FrontendSmoke(UiContext *dc)
         check(Dvar_GetInt("ui_currentNetMap")!=oldNetMap,"Map selection callback updates selected map (restored)");
         Dvar_SetIntByName("ui_currentMap",oldMap);Dvar_SetIntByName("ui_currentNetMap",oldNetMap);
     }
-    int customMaps = 0;
-    char userMapPath[512];
+    int folderMaps = 0;
+    char mapPath[512];
     for (int i = 0; i < sharedUiInfo.mapCount; ++i)
-        if (FS_UserMapZonePath(sharedUiInfo.mapList[i].mapLoadName, userMapPath, sizeof(userMapPath))) ++customMaps;
-    check(customMaps > 0 && sharedUiInfo.mapCount <= 128, "Installed custom maps are in the bounded Local Play catalog");
-    int customRow = 0;
+        if (FS_MapZonePath(sharedUiInfo.mapList[i].mapLoadName, mapPath, sizeof(mapPath))) ++folderMaps;
+    check(folderMaps > 0 && sharedUiInfo.mapCount <= 128, "Map-folder maps are in the bounded Local Play catalog");
+    int row = 0;
     for (int i = 0; i < sharedUiInfo.mapCount; ++i)
     {
         if (!sharedUiInfo.mapList[i].active) continue;
-        if (FS_UserMapZonePath(sharedUiInfo.mapList[i].mapLoadName, userMapPath, sizeof(userMapPath)))
+        if (FS_MapZonePath(sharedUiInfo.mapList[i].mapLoadName, mapPath, sizeof(mapPath)))
         {
-            UI_FeederSelection(0, 4.0f, customRow);
-            check(Dvar_GetInt("ui_currentNetMap") == i, "Local Play selects an installed custom map through its native feeder");
-            check(UI_GetLevelShot(i) != nullptr, "Custom-map preview resolves without a missing material");
+            UI_FeederSelection(0, 4.0f, row);
+            check(Dvar_GetInt("ui_currentNetMap") == i, "Local Play selects a map-folder map through its native feeder");
+            check(UI_GetLevelShot(i) != nullptr, "Map-folder preview resolves without a missing material");
             break;
         }
-        ++customRow;
+        ++row;
     }
     Dvar_SetIntByName("ui_currentMap",oldMap);Dvar_SetIntByName("ui_currentNetMap",oldNetMap);
-    FS_SetUserMap("");
+    FS_SetActiveMap("");
     Menus_CloseByName(dc,"createserver");
     auto *audio=Menus_FindByName(dc,"options_sound");Menus_OpenByName(dc,"options_sound");
     toggle(audio,"cl_voice","Merged audio voice toggle updates its dvar (restored)");

@@ -7,6 +7,7 @@
 #include <universal/q_parse.h>
 #include <database/database.h>
 #include <universal/com_files.h>
+#include <stringed/stringed_hooks.h>
 #include <win32/win_local.h>
 #include <qcommon/unzip.h>
 #include <string>
@@ -103,74 +104,100 @@ static void UI_ReadArenaFile(const char *path, const char *map)
     if (complete) { text[size] = 0; UI_MergeArenaText(text, map); }
 }
 
+// Orders arenas [first, ui_numArenas) by the name players see.
+static void UI_SortArenasByDisplayName(int first)
+{
+    std::vector<std::pair<std::string, char *>> arenas;
+    for (int i = first; i < ui_numArenas; ++i)
+    {
+        const char *longname = Info_ValueForKey(ui_arenaInfos[i], "longname");
+        const char *display = SEH_StringEd_GetString(longname);
+        arenas.emplace_back(display ? display : longname, ui_arenaInfos[i]);
+    }
+    std::stable_sort(arenas.begin(), arenas.end(), [](const auto &a, const auto &b) { return I_stricmp(a.first.c_str(), b.first.c_str()) < 0; });
+    for (const auto &arena : arenas)
+        ui_arenaInfos[first++] = arena.second;
+}
+
+// Adds the maps in <root>/<folder>/<map>/, with the arenas found loose or in their iwds.
+static void UI_LoadMapFolder(const char *root, const char *folder)
+{
+    char pattern[512];
+    Com_sprintf(pattern, sizeof(pattern), "%s/%s/*", root, folder);
+    WIN32_FIND_DATAA entry;
+    HANDLE search = FindFirstFileA(pattern, &entry);
+    if (search == INVALID_HANDLE_VALUE) return;
+    std::vector<std::string> names;
+    do {
+        if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && UI_ValidMapName(entry.cFileName))
+            names.emplace_back(entry.cFileName);
+    } while (FindNextFileA(search, &entry));
+    FindClose(search);
+    for (const std::string &name : names)
+    {
+        char path[512], loaded[512];
+        Com_sprintf(path, sizeof(path), "%s/%s/%s/%s.ff", root, folder, name.c_str(), name.c_str());
+        // A map in more than one place is listed where the game will load it from.
+        if (!FS_MapZonePath(name.c_str(), loaded, sizeof(loaded)) || I_stricmp(loaded, path)) continue;
+        FILE *file = fopen(path, "rb");
+        if (!file) continue;
+        unsigned char header[12];
+        const bool compatible = fread(header, 1, sizeof(header), file) == sizeof(header)
+            && (!memcmp(header, "IWffu100", 8) || !memcmp(header, "IWffs100", 8))
+            && header[8] == 5 && !header[9] && !header[10] && !header[11];
+        fclose(file);
+        if (!compatible) continue; // An IW4 .ff is not an installed IW3 map.
+        int index = 0;
+        for (; index < ui_numArenas; ++index)
+            if (!I_stricmp(name.c_str(), Info_ValueForKey(ui_arenaInfos[index], "map"))) break;
+        if (index == ui_numArenas && ui_numArenas < 128)
+            UI_MergeArenaText(va("{ map \"%s\" longname \"%s\" }", name.c_str(), name.c_str()));
+        Com_sprintf(path, sizeof(path), "%s/%s/%s/*", root, folder, name.c_str());
+        search = FindFirstFileA(path, &entry);
+        if (search == INVALID_HANDLE_VALUE) continue;
+        do {
+            if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            const char *extension = strrchr(entry.cFileName, '.');
+            if (!extension) continue;
+            Com_sprintf(path, sizeof(path), "%s/%s/%s/%s", root, folder, name.c_str(), entry.cFileName);
+            if (!I_stricmp(extension, ".arena")) UI_ReadArenaFile(path, name.c_str());
+            else if (!I_stricmp(extension, ".iwd"))
+            {
+                unzFile zip = unzOpen(path);
+                if (!zip) continue;
+                if (unzGoToFirstFile(zip) == UNZ_OK) do {
+                    unz_file_info info;
+                    char member[256];
+                    if (unzGetCurrentFileInfo(zip, &info, member, sizeof(member), nullptr, 0, nullptr, 0) != UNZ_OK) break;
+                    member[sizeof(member)-1] = 0;
+                    const char *suffix = strrchr(member, '.');
+                    if (suffix && !I_stricmp(suffix, ".arena") && info.uncompressed_size <= 8192 && unzOpenCurrentFile(zip) == UNZ_OK)
+                    {
+                        char text[8193];
+                        int length = unzReadCurrentFile(zip, text, info.uncompressed_size);
+                        int result = unzCloseCurrentFile(zip);
+                        if (length == (int)info.uncompressed_size && result == UNZ_OK)
+                        { text[length] = 0; UI_MergeArenaText(text, name.c_str()); }
+                    }
+                } while (unzGoToNextFile(zip) == UNZ_OK);
+                unzClose(zip);
+            }
+        } while (FindNextFileA(search, &entry));
+        FindClose(search);
+    }
+}
+
+// Stock maps first, then COD Unlimited's, then the ones players installed, each group by name.
 static void UI_LoadInstalledMapArenas()
 {
     const char *roots[] = { fs_basepath->current.string, fs_homepath->current.string };
-    for (int root = 0; root < 2; ++root)
+    const bool oneRoot = !I_stricmp(roots[0], roots[1]);
+    for (const char *folder : FS_MAP_FOLDERS)
     {
-        if (root && !I_stricmp(roots[0], roots[1])) continue;
-        char pattern[512];
-        Com_sprintf(pattern, sizeof(pattern), "%s/usermaps/*", roots[root]);
-        WIN32_FIND_DATAA entry;
-        HANDLE search = FindFirstFileA(pattern, &entry);
-        if (search == INVALID_HANDLE_VALUE) continue;
-        std::vector<std::string> names;
-        do {
-            if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && UI_ValidMapName(entry.cFileName))
-                names.emplace_back(entry.cFileName);
-        } while (FindNextFileA(search, &entry));
-        FindClose(search);
-        std::sort(names.begin(), names.end());
-        for (const std::string &name : names)
-        {
-            char path[512];
-            Com_sprintf(path, sizeof(path), "%s/usermaps/%s/%s.ff", roots[root], name.c_str(), name.c_str());
-            FILE *file = fopen(path, "rb");
-            if (!file) continue;
-            unsigned char header[12];
-            const bool compatible = fread(header, 1, sizeof(header), file) == sizeof(header)
-                && (!memcmp(header, "IWffu100", 8) || !memcmp(header, "IWffs100", 8))
-                && header[8] == 5 && !header[9] && !header[10] && !header[11];
-            fclose(file);
-            if (!compatible) continue; // An IW4 .ff is not an installed IW3 map.
-            int index = 0;
-            for (; index < ui_numArenas; ++index)
-                if (!I_stricmp(name.c_str(), Info_ValueForKey(ui_arenaInfos[index], "map"))) break;
-            if (index == ui_numArenas && ui_numArenas < 128)
-                UI_MergeArenaText(va("{ map \"%s\" longname \"%s\" }", name.c_str(), name.c_str()));
-            Com_sprintf(path, sizeof(path), "%s/usermaps/%s/*", roots[root], name.c_str());
-            search = FindFirstFileA(path, &entry);
-            if (search == INVALID_HANDLE_VALUE) continue;
-            do {
-                if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-                const char *extension = strrchr(entry.cFileName, '.');
-                if (!extension) continue;
-                Com_sprintf(path, sizeof(path), "%s/usermaps/%s/%s", roots[root], name.c_str(), entry.cFileName);
-                if (!I_stricmp(extension, ".arena")) UI_ReadArenaFile(path, name.c_str());
-                else if (!I_stricmp(extension, ".iwd"))
-                {
-                    unzFile zip = unzOpen(path);
-                    if (!zip) continue;
-                    if (unzGoToFirstFile(zip) == UNZ_OK) do {
-                        unz_file_info info;
-                        char member[256];
-                        if (unzGetCurrentFileInfo(zip, &info, member, sizeof(member), nullptr, 0, nullptr, 0) != UNZ_OK) break;
-                        member[sizeof(member)-1] = 0;
-                        const char *suffix = strrchr(member, '.');
-                        if (suffix && !I_stricmp(suffix, ".arena") && info.uncompressed_size <= 8192 && unzOpenCurrentFile(zip) == UNZ_OK)
-                        {
-                            char text[8193];
-                            int length = unzReadCurrentFile(zip, text, info.uncompressed_size);
-                            int result = unzCloseCurrentFile(zip);
-                            if (length == (int)info.uncompressed_size && result == UNZ_OK)
-                            { text[length] = 0; UI_MergeArenaText(text, name.c_str()); }
-                        }
-                    } while (unzGoToNextFile(zip) == UNZ_OK);
-                    unzClose(zip);
-                }
-            } while (FindNextFileA(search, &entry));
-            FindClose(search);
-        }
+        const int first = ui_numArenas;
+        UI_LoadMapFolder(roots[0], folder);
+        if (!oneRoot) UI_LoadMapFolder(roots[1], folder);
+        UI_SortArenasByDisplayName(first);
     }
     Com_Printf(CON_CHANNEL_UI, "Map catalog: %i stock and installed maps\n", ui_numArenas);
 }
@@ -250,7 +277,7 @@ void __cdecl UI_LoadArenas()
         map.mapName = String_Alloc(*display && I_stricmp(display, map.mapLoadName) ? display : friendly.c_str());
         map.imageName = String_Alloc(va("loadscreen_%s", map.mapLoadName));
         char path[512];
-        if (!FS_UserMapZonePath(map.mapLoadName, path, sizeof(path)))
+        if (!FS_MapZonePath(map.mapLoadName, path, sizeof(path)))
             map.levelShot = Material_RegisterHandle(map.imageName, IMAGE_TRACK_UI);
         const char *modes = Info_ValueForKey(ui_arenaInfos[n], "gametype");
         map.typeBits = *modes ? 0 : -1;

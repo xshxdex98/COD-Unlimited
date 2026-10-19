@@ -668,7 +668,7 @@ static Material *Material_RegisterMenuArtwork(const char *name)
 }
 #endif
 
-Material *Material_RegisterUserMapPreview(const char *mapName)
+Material *Material_RegisterMapPreview(const char *mapName)
 {
 #ifdef KISAK_MP
     char name[96];

@@ -40,6 +40,14 @@ defined in `mod/source_data/*.gdt` with their images under `mod/texture_assets/`
 The game can write out every string table it has loaded: `dumpraw 32` in the console saves them
 under `raw/` in the game folder.
 
+### Maps
+The maps COD Unlimited ships beside the stock ones are listed in `mod/maps.csv` with the names the
+menus show. They are community remakes, so their files are not in this repository: extract the
+downloads into a folder and run `py tools/install_maps.py <that folder>` (then build the content as
+above, which turns the names into localized strings). Each map lives in `zone/maps/<map>/` with its
+zones, iwds and arena. Its iwds are only searched while that map is loaded, because they often
+replace stock images. Maps players install themselves go in `usermaps/<map>/` and work the same way.
+
 
 ```
 Keep in Mind: This is a ~20 year old game with some known exploits. We will try to fix these as we become aware of them.

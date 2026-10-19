@@ -4246,10 +4246,10 @@ Material *__cdecl UI_GetLevelShot(int index)
         index = 0;
     char path[512];
     const char *mapName = sharedUiInfo.mapList[index].mapLoadName;
-    if (FS_UserMapZonePath(mapName, path, sizeof(path)))
+    if (FS_MapZonePath(mapName, path, sizeof(path)))
     {
-        FS_SetUserMap(mapName);
-        return Material_RegisterUserMapPreview(mapName);
+        FS_SetActiveMap(mapName);
+        return Material_RegisterMapPreview(mapName);
     }
     if (!sharedUiInfo.serverHardwareIconList[40 * index - 5082])
         sharedUiInfo.serverHardwareIconList[40 * index - 5082] = Material_RegisterHandle(
